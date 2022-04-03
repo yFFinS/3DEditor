@@ -1,6 +1,7 @@
 import OpenGL.GL as GL
 from OpenGL.GL.shaders import compileShader, compileProgram
 from common import UnmanagedResource
+import glm
 
 
 class ShaderProgram(UnmanagedResource):
@@ -20,6 +21,10 @@ class ShaderProgram(UnmanagedResource):
 
     def use(self):
         GL.glUseProgram(self.__program)
+
+    def set_mat4(self, name, value):
+        loc = GL.glGetUniformLocation(self.__program, name)
+        GL.glUniformMatrix4fv(loc, 1, False, glm.value_ptr(value))
 
     def dispose(self):
         GL.glDeleteShader(self.__vertex)
