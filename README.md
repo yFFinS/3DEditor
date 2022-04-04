@@ -1,5 +1,5 @@
 # 3DEditor
-Версия python 3.10
+## Версия **python 3.10**  
 Необходимые пакеты:
 ```
 pip install PyOpenGL PyOpenGL_accelerate  
