@@ -78,9 +78,9 @@ class Mesh:
         self.__vba.unbind()
 
 
-class RenderableObject(BaseTransform):
+class SceneObject(BaseTransform):
     def __init__(self):
-        super(RenderableObject, self).__init__()
+        super(SceneObject, self).__init__()
         self.mesh = None
         self.shader_program = None
 
@@ -100,8 +100,7 @@ class RenderableObject(BaseTransform):
 class Camera(BaseTransform):
     def __init__(self, width, height):
         super(Camera, self).__init__()
-        self.translation = glm.vec3(0, 0, -1)
-        self.rotation = glm.quat_cast(glm.rotate(glm.pi() / 8, glm.vec3(0, 1, 0)))
+        self.translation = glm.vec3(0, 0, -5)
         self.fov = 60
         self.min_z = 0.01
         self.max_z = 100
@@ -126,18 +125,19 @@ class CameraController:
 
     def handle_key_press(self, gl_widget, event):
         key = event.key()
-        if key == Qt.Key_E:
-            self.camera.move_by(0, self.move_speed, 0)
-        if key == Qt.Key_Q:
-            self.camera.move_by(0, -self.move_speed, 0)
-        if key == Qt.Key_A:
-            self.camera.move_by(self.move_speed, 0, 0)
-        if key == Qt.Key_D:
-            self.camera.move_by(-self.move_speed, 0, 0)
-        if key == Qt.Key_W:
-            self.camera.move_by(0, 0, self.move_speed)
-        if key == Qt.Key_S:
-            self.camera.move_by(0, 0, -self.move_speed)
+        match key:
+            case Qt.Key_E:
+                self.camera.move_by(0, self.move_speed, 0)
+            case Qt.Key_Q:
+                self.camera.move_by(0, -self.move_speed, 0)
+            case Qt.Key_A:
+                self.camera.move_by(self.move_speed, 0, 0)
+            case Qt.Key_D:
+                self.camera.move_by(-self.move_speed, 0, 0)
+            case Qt.Key_W:
+                self.camera.move_by(0, 0, self.move_speed)
+            case Qt.Key_S:
+                self.camera.move_by(0, 0, -self.move_speed)
         gl_widget.update()
 
     def handle_mouse_move(self, gl_widget, event):
@@ -177,11 +177,20 @@ class CameraController:
 
 class Scene:
     def __init__(self):
-        self.__objects: list[RenderableObject] = []
+        self.__objects: list[SceneObject] = []
         self.camera = None
 
-    def create_object(self) -> RenderableObject:
-        obj = RenderableObject()
+    @staticmethod
+    def load_from_file(filename):
+        try:
+            with open(filename) as f:
+                pass
+        except OSError as e:
+            print(e)
+            exit(1)
+
+    def create_object(self) -> SceneObject:
+        obj = SceneObject()
         self.__objects.append(obj)
         return obj
 
