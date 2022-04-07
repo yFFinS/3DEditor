@@ -27,6 +27,8 @@ class ShaderProgram(UnmanagedResource):
         GL.glUniformMatrix4fv(loc, 1, False, glm.value_ptr(value))
 
     def dispose(self):
+        if self.__program == -1:
+            return
         GL.glDeleteShader(self.__vertex)
         self.__vertex = -1
         GL.glDeleteShader(self.__fragment)
@@ -35,5 +37,4 @@ class ShaderProgram(UnmanagedResource):
         self.__program = -1
 
     def __del__(self):
-        if self.__program != -1:
-            self.dispose()
+        self.dispose()

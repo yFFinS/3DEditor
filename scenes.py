@@ -1,3 +1,4 @@
+import OpenGL.GL
 import glm
 
 from buffers import *
@@ -98,9 +99,11 @@ class SceneObject(BaseTransform):
 
 
 class Camera(BaseTransform):
+    default_position = glm.vec3(0, 0, -5)
+
     def __init__(self, width, height):
         super(Camera, self).__init__()
-        self.translation = glm.vec3(0, 0, -5)
+        self.translation = self.default_position
         self.fov = 60
         self.min_z = 0.01
         self.max_z = 100
@@ -120,16 +123,25 @@ class CameraController:
         self.mouse_sensitivity = 0.003
         self.min_rotate_delta = 1
 
+        self.__active_rendering_mode = 0
+        self.__rendering_modes = [OpenGL.GL.GL_FILL, OpenGL.GL.GL_LINE, OpenGL.GL.GL_POINT]
+
         self.__last_mouse_pos = glm.vec2()
         self.__mouse_rotating = False
 
     def handle_key_press(self, gl_widget, event):
         key = event.key()
         match key:
+            case Qt.Key_F:
+                self.__active_rendering_mode = (self.__active_rendering_mode + 1) % len(self.__rendering_modes)
+                OpenGL.GL.glPolygonMode(OpenGL.GL.GL_FRONT_AND_BACK, self.__rendering_modes[self.__active_rendering_mode])
+            case Qt.Key_R:
+                self.camera.rotation = glm.quat()
+                self.camera.translation = self.camera.default_position
             case Qt.Key_E:
-                self.camera.move_by(0, self.move_speed, 0)
+                self.camera.translate_by(0, self.move_speed, 0)
             case Qt.Key_Q:
-                self.camera.move_by(0, -self.move_speed, 0)
+                self.camera.translate_by(0, -self.move_speed, 0)
             case Qt.Key_A:
                 self.camera.move_by(self.move_speed, 0, 0)
             case Qt.Key_D:
@@ -189,10 +201,11 @@ class Scene:
             print(e)
             exit(1)
 
-    def create_object(self) -> SceneObject:
-        obj = SceneObject()
+    def add_object(self, obj):
         self.__objects.append(obj)
-        return obj
+
+    def remove_object(self, obj):
+        self.__objects.remove(obj)
 
     def render(self):
         if not self.camera:
