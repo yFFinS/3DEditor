@@ -84,6 +84,7 @@ class SceneObject(BaseTransform):
         super(SceneObject, self).__init__()
         self.mesh = None
         self.shader_program = None
+        self.render_mode = GL.GL_TRIANGLES
 
     def render(self, camera):
         model = glm.translate(self.translation) * glm.mat4_cast(self.rotation) * glm.scale(self.scale)
@@ -94,7 +95,7 @@ class SceneObject(BaseTransform):
         self.shader_program.set_mat4("Instance.MVP", mvp)
 
         self.mesh.bind_vba()
-        GL.glDrawElements(GL.GL_TRIANGLES, self.mesh.get_index_count(), GL.GL_UNSIGNED_INT, None)
+        GL.glDrawElements(self.render_mode, self.mesh.get_index_count(), GL.GL_UNSIGNED_INT, None)
         self.mesh.unbind_vba()
 
 
@@ -114,6 +115,9 @@ class Camera(BaseTransform):
 
     def get_proj_mat(self):
         return glm.perspective(glm.radians(self.fov), self.aspect, self.min_z, self.max_z)
+
+    def get_frustum_planes(self):
+        pass
 
 
 class CameraController:
