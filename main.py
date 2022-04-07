@@ -81,14 +81,16 @@ class GlSceneWidget(QGLWidget):
         point2.shader_program = self.__program
         self.__scene.add_object(point2)
 
-        line = SceneLineBy2Points(LineBy2Points(point1.point, point2.point))
+        line = SceneLine(LineBy2Points(point1.point, point2.point))
         line.shader_program = self.__program
         self.__scene.add_object(line)
 
-    def resizeGL(self, w: int, h: int):
+    def resizeGL(self, w, h):
         if w <= 0 or h <= 0:
             return
         GL.glViewport(0, 0, w, h)
+        self.__scene.camera.width = w
+        self.__scene.camera.height = h
 
     def paintGL(self):
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)

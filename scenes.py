@@ -31,6 +31,9 @@ class BaseTransform:
     def get_up(self):
         return self.rotation * glm.vec3(0, 1, 0)
 
+    def get_model_mat(self):
+        return glm.translate(self.translation) * glm.mat4_cast(self.rotation) * glm.scale(self.scale)
+
 
 class Mesh:
     def __init__(self):
@@ -86,12 +89,13 @@ class SceneObject(BaseTransform):
         self.shader_program = None
         self.render_mode = GL.GL_TRIANGLES
 
+    def get_render_mat(self, camera):
+        return camera.get_mvp(self.get_model_mat())
+
     def render(self, camera):
-        model = glm.translate(self.translation) * glm.mat4_cast(self.rotation) * glm.scale(self.scale)
-        mvp = camera.get_proj_mat() * camera.get_view_mat() * model
+        mvp = self.get_render_mat(camera)
 
         self.shader_program.use()
-        self.shader_program.set_mat4("Instance.Model", model)
         self.shader_program.set_mat4("Instance.MVP", mvp)
 
         self.mesh.bind_vba()
@@ -108,16 +112,30 @@ class Camera(BaseTransform):
         self.fov = 60
         self.min_z = 0.01
         self.max_z = 100
-        self.aspect = width / height
+        self.width = width
+        self.height = height
 
     def get_view_mat(self):
         return glm.lookAt(self.translation, self.translation + self.get_forward(), glm.vec3(0, 1, 0))
 
     def get_proj_mat(self):
-        return glm.perspective(glm.radians(self.fov), self.aspect, self.min_z, self.max_z)
+        return glm.perspective(glm.radians(self.fov), self.width / self.height, self.min_z, self.max_z)
 
-    def get_frustum_planes(self):
-        pass
+    def get_mvp(self, model_mat):
+        return self.get_proj_mat() * self.get_view_mat() * model_mat
+
+    def to_screen_space(self, vec3):
+        device_space = self.to_device_space_2d(vec3)
+        if not device_space:
+            return None
+        return ((device_space + 1) / 2) * glm.vec2(self.width, self.height)
+
+    def to_device_space_2d(self, vec3):
+        clip_space = self.get_proj_mat() * (self.get_view_mat() * glm.vec4(vec3, 1))
+        if abs(clip_space.w) < 1e-8:
+            return None
+        device_space = glm.vec3(clip_space.x, clip_space.y, clip_space.z) / clip_space.w
+        return glm.vec2(device_space)
 
 
 class CameraController:

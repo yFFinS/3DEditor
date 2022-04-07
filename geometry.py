@@ -20,6 +20,10 @@ class Point(BaseGeometryObject):
         self.position = glm.vec3(x, y, z)
 
     @property
+    def xyz(self):
+        return self.position
+
+    @property
     def x(self):
         return self.position.x
 
@@ -66,10 +70,10 @@ class LineBy2Points(BaseLine):
         pass
 
     def get_pivot_points(self):
-        return self.point1, self.point2
+        return self.point1.xyz, self.point2.xyz
 
     def get_directional_vector(self):
-        return self.point2 - self.point1
+        return self.point2.xyz - self.point1.xyz
 
 
 class LineByPointAndLine(BaseLine):
@@ -87,7 +91,7 @@ class LineByPointAndLine(BaseLine):
         pass
 
     def get_pivot_points(self):
-        return self.point, (self.point + self.line.get_direction_vector()).xyz
+        return self.point.xyz, (self.point.xyz + self.line.get_direction_vector()).xyz
 
     def get_directional_vector(self):
         return self.line.get_direction_vector()
@@ -110,21 +114,9 @@ class PlaneBy3Points(BasePlane):
     def __init__(self, point1, point2, point3):
         if is_coplanar(point1, point2, point3):
             raise Exception("Ожидались некомпланарные точки")
-        self.__point1 = point1
-        self.__point2 = point2
-        self.__point3 = point3
-
-    @property
-    def point1(self):
-        return self.__point1.xyz
-
-    @property
-    def point2(self):
-        return self.__point2.xyz
-
-    @property
-    def point3(self):
-        return self.__point3.xyz
+        self.point1 = point1
+        self.point2 = point2
+        self.point3 = point3
 
     def get_dist_to_point(self, point):
         pass
@@ -136,24 +128,16 @@ class PlaneBy3Points(BasePlane):
         pass
 
     def get_pivot_points(self):
-        return self.__point1, self.__point2, self.__point3
+        return self.point1.xyz, self.point2.xyz, self.point3.xyz
 
     def get_direction_vectors(self):
-        return self.__point2 - self.__point1, self.__point3 - self.__point2
+        return self.point2.xyz - self.point1.xyz, self.point3.xyz - self.point2.xyz
 
 
 class PlaneByPointAndPlane(BasePlane):
     def __init__(self, point, plane):
-        self.__point = point
-        self.__plane = plane
-
-    @property
-    def point(self):
-        return self.__point
-
-    @property
-    def plane(self):
-        return self.__plane
+        self.point = point
+        self.plane = plane
 
     def get_dist_to_point(self, point):
         pass
