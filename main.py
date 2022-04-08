@@ -58,7 +58,6 @@ class GlSceneWidget(QGLWidget):
         self.__camera_controller = None
 
         self.installEventFilter(self)
-        self.grabKeyboard()
 
     def sizeHint(self):
         return QSize(800, 640)

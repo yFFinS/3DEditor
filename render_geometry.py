@@ -1,4 +1,5 @@
 import OpenGL.GL as GL
+import glm
 import numpy as np
 
 from geometry import *
@@ -34,7 +35,7 @@ class SceneLine(SceneObject):
         self.update_mesh(self.line.point1.position, self.line.point2.position)
 
     def get_render_mat(self, camera):
-        return glm.identity(glm.mat4)
+        return camera.get_proj_mat() * camera.get_view_mat()
 
     def update_mesh(self, p1, p2):
         self.mesh.set_positions(np.array([p1, p2]))
@@ -43,17 +44,20 @@ class SceneLine(SceneObject):
         
     def render(self, camera):
         p1, p2 = self.line.get_pivot_points()
-        model = self.get_model_mat()
-        mp1 = model * p1
-        mp2 = model * p2
 
-        sp1 = camera.to_device_space_2d(mp1)
-        sp2 = camera.to_device_space_2d(mp2)
-        if not sp1 or not sp2:
-            return
+        # if almost_equal_vec(p1, p2):
+        #     return
+        #
+        # intersections = intersect_line_frustum(p1, p2, camera.get_frustum_edges())
+        # print(intersections)
+        # if len(intersections) != 2:
+        #     return
+        #
+        # self.update_mesh(*intersections)
 
-        dir_v = glm.normalize(sp2 - sp1)
-        self.update_mesh(glm.vec3(sp1, 0), glm.vec3(sp2, 0))
+        # Умом
+        dir_v = self.line.get_directional_vector()
+        self.update_mesh(p1 + 10000 * dir_v, p2 - 10000 * dir_v)
 
         super(SceneLine, self).render(camera)
 

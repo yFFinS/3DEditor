@@ -1,5 +1,6 @@
 import OpenGL.GL
 import glm
+import numpy
 
 from buffers import *
 from helpers import empty_float32_array, empty_uint32_array
@@ -39,7 +40,7 @@ class Mesh:
     def __init__(self):
         self.__vba = VertexArray()
 
-        self.__vbo_positions = VertexBuffer()
+        self.__vbo_positions = VertexBuffer(GL.GL_STREAM_DRAW)
         self.__vbo_colors = VertexBuffer()
         self.__ibo = IndexBuffer()
 
@@ -136,6 +137,33 @@ class Camera(BaseTransform):
             return None
         device_space = glm.vec3(clip_space.x, clip_space.y, clip_space.z) / clip_space.w
         return glm.vec2(device_space)
+
+    def get_frustum_edges(self):
+        fov = glm.radians(self.fov)
+        aspect = self.width / self.height
+        h_near = 2 * numpy.tan(fov / 2) * self.min_z
+        w_near = h_near * aspect
+        h_far = 2 * numpy.tan(fov / 2) * self.max_z
+        w_far = h_far * aspect
+
+        look_dir = self.get_forward()
+        up = self.get_up()
+        right = self.get_right()
+
+        center_near = self.translation + look_dir * self.min_z
+        center_far = self.translation + look_dir * self.max_z
+
+        top_left_near = center_near + (up * (h_near / 2)) - (right * (w_near / 2))
+        top_right_near = center_near + (up * (h_near / 2)) + (right * (w_near / 2))
+        bot_left_near = center_near - (up * (h_near / 2)) - (right * (w_near / 2))
+        bot_right_near = center_near - (up * (h_near / 2)) + (right * (w_near / 2))
+
+        top_left_far = center_far + (up * (h_far / 2)) - (right * (w_far / 2))
+        top_right_far = center_far + (up * (h_far / 2)) + (right * (w_far / 2))
+        bot_left_far = center_far - (up * (h_far / 2)) - (right * (w_far / 2))
+        bot_right_far = center_far - (up * (h_far / 2)) + (right * (w_far / 2))
+        return [top_left_near, top_right_near, bot_left_near, bot_right_near,
+                top_left_far, top_right_far, bot_left_far, bot_right_far]
 
 
 class CameraController:

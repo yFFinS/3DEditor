@@ -31,11 +31,12 @@ class Buffer(UnmanagedResource):
 
 
 class VertexBuffer(Buffer):
-    def __init__(self):
+    def __init__(self, usage=GL.GL_STATIC_DRAW):
+        self.usage = usage
         super(VertexBuffer, self).__init__(GL.GL_ARRAY_BUFFER)
 
     def set_data(self, size, data):
-        GL.glNamedBufferData(self.id, size, data, GL.GL_STATIC_DRAW)
+        GL.glNamedBufferData(self.id, size, data, self.usage)
 
 
 class VertexArray(UnmanagedResource):
