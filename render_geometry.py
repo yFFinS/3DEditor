@@ -3,7 +3,7 @@ import glm
 import numpy as np
 
 from geometry import *
-from scenes import SceneObject, Mesh
+from scene import SceneObject, Mesh
 from helpers import *
 
 
@@ -21,7 +21,17 @@ class ScenePoint(SceneObject):
 
     def set_position(self, x, y, z):
         self.point.position = glm.vec3(x, y, z)
-        self.translation = glm.vec3(x, y, z)
+        super(ScenePoint, self).set_position(x, y, z)
+
+    def get_selection_weight(self, camera, x, y):
+        pos = glm.vec2(x, y)
+        spos = camera.to_screen_space(self.translation)
+        dist = glm.distance(pos, spos)
+
+        max_dist = 20
+        if dist > max_dist:
+            return None
+        return 1 - 0.8 * dist / max_dist
 
 
 class SceneLine(SceneObject):
@@ -55,13 +65,14 @@ class SceneLine(SceneObject):
         #
         # self.update_mesh(*intersections)
 
-        # Умом
+        # TODO: Умом
         dir_v = self.line.get_directional_vector()
         self.update_mesh(p1 + 10000 * dir_v, p2 - 10000 * dir_v)
 
         super(SceneLine, self).render(camera)
 
 
+# TODO: Не работает
 class ScenePlane(SceneObject):
     def __init__(self, plane):
         super(ScenePlane, self).__init__()
@@ -82,13 +93,4 @@ class ScenePlane(SceneObject):
         return self.__render_mat
 
     def render(self, camera):
-        p1, p2, p3 = self.plane.get_pivot_points()
-        camera.to_screen_space(p1)
-        mvp = camera.get_mvp(self.get_model_mat())
-        sp1 = mvp * p1
-        sp2 = mvp * p2
-        sp3 = mvp * p3
-        dir_v = self.line.get_directional_vector()
-        sp1 += dir_v * 10
-
         super(ScenePlane, self).render(camera)
