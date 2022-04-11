@@ -25,11 +25,24 @@ class Camera(BaseTransform):
     def get_mvp(self, model_mat):
         return self.get_proj_mat() * self.get_view_mat() * model_mat
 
-    def to_screen_space(self, vec3):
+    def world_to_screen_space(self, vec3):
         device_space = self.to_device_space_2d(vec3)
         if not device_space:
             return None
         return ((device_space + 1) / 2) * glm.vec2(self.width, self.height)
+
+    def screen_to_world(self, pos):
+        inv = glm.inverse(self.get_proj_mat() * self.get_view_mat())
+
+        near = glm.vec4((pos.x - self.width / 2) / self.width * 2,
+                        -1 * (pos.y - self.height / 2) / self.height * 2, -1, 1.0)
+        far = glm.vec4((pos.x - self.width / 2) / self.width * 2,
+                       -1 * (pos.y - self.height / 2) / self.height * 2, 1, 1.0)
+        near_res = inv * near
+        far_res = inv * far
+        near_res /= near_res.w
+        far_res /= far_res.w
+        return glm.normalize(glm.vec3(far_res - near_res))
 
     def to_device_space_2d(self, vec3):
         clip_space = self.get_proj_mat() * (self.get_view_mat() * glm.vec4(vec3, 1))
@@ -64,6 +77,9 @@ class Camera(BaseTransform):
         bot_right_far = center_far - (up * (h_far / 2)) + (right * (w_far / 2))
         return [top_left_near, top_right_near, bot_left_near, bot_right_near,
                 top_left_far, top_right_far, bot_left_far, bot_right_far]
+
+
+from shared import EditorShared
 
 
 class CameraController:
@@ -102,6 +118,13 @@ class CameraController:
 
     def handle_mouse_press(self, gl_widget, event):
         button = event.button()
+        if button == Qt.LeftButton:
+            p = event.pos()
+            d = self.camera.screen_to_world(glm.vec2(p.x(), p.y()))
+            print(d)
+            pos = self.camera.translation + 5 * d
+            EditorShared.get_editor().create_point(pos.x, pos.y, pos.x)
+
         if button != Qt.MiddleButton:
             return
         pos = event.pos()

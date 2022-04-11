@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QSize, QEvent, QObject
+from PyQt5.QtCore import QSize, QEvent, QObject, Qt
 from PyQt5.QtGui import QFont, QPalette, QKeyEvent, QMouseEvent, QWheelEvent
 from PyQt5.QtWidgets import (QVBoxLayout, QListWidgetItem, QLineEdit,
                              QHBoxLayout, QWidget, QLabel, QMainWindow,
@@ -16,15 +16,15 @@ class Window(QMainWindow):
         super().__init__()
         self.setGeometry(500, 300, 1000, 600)
 
+        EditorShared.init(EditorGUI())
+
         menuBar = self.menuBar()
         fileMenu = menuBar.addMenu('Файл')
         sceneMenu = menuBar.addMenu('Сцена')
 
         createPointAction = QAction("Создать точку", self)
-        createPointAction.triggered.connect(self.create_point)
+        createPointAction.triggered.connect(self.editor.create_point)
         sceneMenu.addAction(createPointAction)
-
-        EditorShared.init(EditorGUI())
         self.setCentralWidget(self.editor)
         self.setWindowTitle('3D Editor')
 
@@ -34,16 +34,6 @@ class Window(QMainWindow):
 
     def closeEvent(self, a0):
         self.editor.closeEvent(a0)
-
-    def create_point(self):
-        scene = self.editor.get_scene()
-        scene_exp = self.editor.get_scene_explorer()
-        obj = ScenePoint(Point(0, 0, 0))
-        scene.add_object(obj)
-        widget = SceneObjectWidget(obj)
-        scene_exp.add_scene_object_widget(widget)
-
-        self.editor.get_gl_widget().update()
 
 
 class EditorGUI(QWidget):
@@ -68,6 +58,16 @@ class EditorGUI(QWidget):
 
     def get_gl_widget(self):
         return self.__gl_widget
+
+    def create_point(self, x, y, z):
+        scene = self.get_scene()
+        scene_exp = self.get_scene_explorer()
+        obj = ScenePoint(Point(x, y, z))
+        scene.add_object(obj)
+        widget = SceneObjectWidget(obj)
+        scene_exp.add_scene_object_widget(widget)
+
+        self.get_gl_widget().update()
 
     def closeEvent(self, a0):
         self.__gl_widget.unload()
@@ -101,6 +101,10 @@ class GlSceneWidget(QGLWidget):
         self.__scene.camera = Camera(self.width(), self.height())
         self.__camera_controller = CameraController(self.__scene.camera)
         SceneObject.default_shader_program = self.__program
+
+        self.__scene.add_object(SceneCoordAxisX())
+        self.__scene.add_object(SceneCoordAxisY())
+        self.__scene.add_object(SceneCoordAxisZ())
 
     def resizeGL(self, w, h):
         if w <= 0 or h <= 0:

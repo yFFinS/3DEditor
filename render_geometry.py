@@ -25,7 +25,7 @@ class ScenePoint(SceneObject):
 
     def get_selection_weight(self, camera, x, y):
         pos = glm.vec2(x, y)
-        spos = camera.to_screen_space(self.translation)
+        spos = camera.world_to_screen_space(self.translation)
         dist = glm.distance(pos, spos)
 
         max_dist = 20
@@ -94,3 +94,58 @@ class ScenePlane(SceneObject):
 
     def render(self, camera):
         super(ScenePlane, self).render(camera)
+
+
+axis_line_extent = 10000
+axis_line_color = glm.vec4(0.4, 0, 0.7, 1)
+
+
+class SceneCoordAxisX(SceneObject):
+    def __init__(self):
+        super(SceneCoordAxisX, self).__init__()
+
+        self.render_mode = GL.GL_LINES
+
+        self.mesh = Mesh()
+        self.mesh.set_positions(
+            np.array([
+                glm.vec3(-axis_line_extent, 0, 0),
+                glm.vec3(axis_line_extent, 0, 0)
+            ])
+        )
+        self.mesh.set_indices(to_uint32_array([0, 1]))
+        self.mesh.set_colors(np.array([axis_line_color for _ in range(self.mesh.get_index_count())]))
+
+
+class SceneCoordAxisY(SceneObject):
+    def __init__(self):
+        super(SceneCoordAxisY, self).__init__()
+
+        self.render_mode = GL.GL_LINES
+
+        self.mesh = Mesh()
+        self.mesh.set_positions(
+            np.array([
+                glm.vec3(0, -axis_line_extent, 0),
+                glm.vec3(0, axis_line_extent, 0)
+            ])
+        )
+        self.mesh.set_indices(to_uint32_array([0, 1]))
+        self.mesh.set_colors(np.array([axis_line_color for _ in range(self.mesh.get_index_count())]))
+
+
+class SceneCoordAxisZ(SceneObject):
+    def __init__(self):
+        super(SceneCoordAxisZ, self).__init__()
+
+        self.render_mode = GL.GL_LINES
+
+        self.mesh = Mesh()
+        self.mesh.set_positions(
+            np.array([
+                glm.vec3(0, 0, -axis_line_extent),
+                glm.vec3(0, 0, axis_line_extent)
+            ])
+        )
+        self.mesh.set_indices(to_uint32_array([0, 1]))
+        self.mesh.set_colors(np.array([axis_line_color for _ in range(self.mesh.get_index_count())]))

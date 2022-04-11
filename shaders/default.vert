@@ -19,5 +19,5 @@ void main()
     if (Instance.Selected < 0)
         oColor = aColor;
     else
-        oColor = vec4(54 / 256f, 225 / 256f, 247 / 256f, aColor.w);
+        oColor = vec4(54 / 256.0f, 225 / 256.0f, 247 / 256.0f, aColor.w);
 }

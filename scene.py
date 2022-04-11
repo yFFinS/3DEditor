@@ -2,9 +2,6 @@ import glm
 import numpy
 
 from native_rendering import *
-from helpers import empty_float32_array, empty_uint32_array
-
-from PyQt5.QtCore import Qt
 
 
 class BaseTransform:
