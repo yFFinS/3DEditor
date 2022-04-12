@@ -1,14 +1,16 @@
+import OpenGL.GL
 from PyQt5.QtCore import QSize, QEvent, QObject, Qt
 from PyQt5.QtGui import QFont, QPalette, QKeyEvent, QMouseEvent, QWheelEvent
 from PyQt5.QtWidgets import (QVBoxLayout, QListWidgetItem, QLineEdit,
                              QHBoxLayout, QWidget, QLabel, QMainWindow,
-                             QAction, QListWidget, QAbstractItemView)
+                             QAction, QListWidget, QAbstractItemView, QPushButton)
 from PyQt5.QtOpenGL import QGLWidget
 
 from scene import *
 from render_geometry import *
 from shared import EditorShared
 from camera import Camera, CameraController
+from geometry_builder import *
 
 
 class Window(QMainWindow):
@@ -20,11 +22,7 @@ class Window(QMainWindow):
 
         menuBar = self.menuBar()
         fileMenu = menuBar.addMenu('Файл')
-        sceneMenu = menuBar.addMenu('Сцена')
 
-        createPointAction = QAction("Создать точку", self)
-        createPointAction.triggered.connect(self.editor.create_point)
-        sceneMenu.addAction(createPointAction)
         self.setCentralWidget(self.editor)
         self.setWindowTitle('3D Editor')
 
@@ -36,15 +34,61 @@ class Window(QMainWindow):
         self.editor.closeEvent(a0)
 
 
+class SceneActions(QWidget):
+    def __init__(self, *args):
+        super(SceneActions, self).__init__(*args)
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        self.__buttons = []
+
+        def create_button(text, action):
+            btn = QPushButton(text, self)
+            btn.setStyleSheet("background-color : grey")
+            btn.pressed.connect(action)
+            self.__buttons.append(btn)
+            layout.addWidget(btn)
+
+        create_button("Move", self.action_move)
+        create_button("Point", self.action_point)
+        create_button("Line", self.action_line)
+        create_button("Plane", self.action_plane)
+
+    def set_button_selected(self, btn):
+        self.deselect_all_buttons()
+        btn.setStyleSheet("background-color : green")
+
+    def deselect_all_buttons(self):
+        for btn in self.__buttons:
+            btn.setStyleSheet("background-color : grey")
+
+    def action_move(self):
+        self.set_button_selected(self.sender())
+        EditorShared.get_gl_widget().no_action()
+
+    def action_point(self):
+        self.set_button_selected(self.sender())
+        EditorShared.get_gl_widget().create_point()
+
+    def action_line(self):
+        self.set_button_selected(self.sender())
+        EditorShared.get_gl_widget().create_line()
+
+    def action_plane(self):
+        self.set_button_selected(self.sender())
+        EditorShared.get_gl_widget().create_plane()
+
+
 class EditorGUI(QWidget):
     def __init__(self):
         super(EditorGUI, self).__init__()
 
         self.__gl_widget = GlSceneWidget(self)
         self.__scene_exp = SceneExplorer(self)
+        self.__scene_act = SceneActions(self)
 
         self.__mainLayout = QHBoxLayout()
 
+        self.__mainLayout.addWidget(self.__scene_act)
         self.__mainLayout.addWidget(self.__scene_exp)
         self.__mainLayout.addWidget(self.__gl_widget)
 
@@ -59,16 +103,6 @@ class EditorGUI(QWidget):
     def get_gl_widget(self):
         return self.__gl_widget
 
-    def create_point(self, x, y, z):
-        scene = self.get_scene()
-        scene_exp = self.get_scene_explorer()
-        obj = ScenePoint(Point(x, y, z))
-        scene.add_object(obj)
-        widget = SceneObjectWidget(obj)
-        scene_exp.add_scene_object_widget(widget)
-
-        self.get_gl_widget().update()
-
     def closeEvent(self, a0):
         self.__gl_widget.unload()
 
@@ -79,7 +113,10 @@ class GlSceneWidget(QGLWidget):
         self.__program = None
         self.__scene = Scene()
         self.__camera_controller = None
+        self.__last_action = None
         self.__selected_objects = []
+
+        self.__geometry_builder = None
 
         self.installEventFilter(self)
 
@@ -124,7 +161,10 @@ class GlSceneWidget(QGLWidget):
             case QEvent.MouseButtonPress:
                 event = QMouseEvent(a1)
                 if event.button() == Qt.LeftButton:
-                    self.try_select_scene_object(event)
+                    if not self.__geometry_builder:
+                        self.try_select_scene_object(event)
+                    else:
+                        self.handle_geometry_builder(event)
                 self.__camera_controller.handle_mouse_press(self, event)
             case QEvent.MouseButtonRelease:
                 self.__camera_controller.handle_mouse_release(self, QMouseEvent(a1))
@@ -135,6 +175,33 @@ class GlSceneWidget(QGLWidget):
     def unload(self):
         self.__scene.unload()
         self.__program.dispose()
+
+    def no_action(self):
+        self.__geometry_builder = None
+        self.__last_action = self.no_action
+
+    def create_point(self):
+        self.__geometry_builder = PointBuilder(self.get_scene(), EditorShared.get_scene_explorer())
+        self.__last_action = self.create_point
+
+    def create_line(self):
+        self.__geometry_builder = LineBuilder(self.get_scene(), EditorShared.get_scene_explorer())
+        self.__last_action = self.create_line
+
+    def create_plane(self):
+        self.__geometry_builder = PlaneBuilder(self.get_scene(), EditorShared.get_scene_explorer())
+        self.__last_action = self.create_plane
+
+    def handle_geometry_builder(self, event):
+        pe = event.pos()
+        pos = glm.vec2(pe.x(), pe.y())
+        ready = self.__geometry_builder.on_click(pos)
+        if ready:
+            self.__geometry_builder = None
+            self.__last_action()
+
+
+        self.update()
 
     def try_select_scene_object(self, event):
         to_select = None
@@ -282,39 +349,4 @@ class SceneObjectList(QListWidget):
         item.setSelected(value)
         widget = self.itemWidget(item)
         widget.get_object().selected = value
-
-
-class SceneObjectWidget(QWidget):
-    __point_counter = 1
-    __line_counter = 1
-
-    def __init__(self, scene_object):
-        super(SceneObjectWidget, self).__init__()
-        self.__layout = QHBoxLayout()
-
-        font = QFont("Arial", 14)
-        self.__name_label = QLabel(self)
-        self.__name_label.setFont(font)
-
-        if isinstance(scene_object, ScenePoint):
-            text = f'Point{SceneObjectWidget.__point_counter}'
-            SceneObjectWidget.__point_counter += 1
-        elif isinstance(scene_object, SceneLine):
-            text = f'Line{SceneObjectWidget.__line_counter}'
-            SceneObjectWidget.__line_counter += 1
-        else:
-            text = 'Unknown'
-
-        self.__name_label.setText(text)
-        self.__layout.addWidget(self.__name_label)
-        self.__scene_object = scene_object
-
-        self.__layout.addStretch()
-        self.setLayout(self.__layout)
-
-    def get_object(self):
-        return self.__scene_object
-
-    def sizeHint(self):
-        return self.__layout.sizeHint()
 

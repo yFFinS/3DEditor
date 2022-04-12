@@ -72,7 +72,6 @@ class SceneLine(SceneObject):
         super(SceneLine, self).render(camera)
 
 
-# TODO: Не работает
 class ScenePlane(SceneObject):
     def __init__(self, plane):
         super(ScenePlane, self).__init__()
@@ -88,9 +87,6 @@ class ScenePlane(SceneObject):
 
     def update_mesh(self, p1, p2, p3):
         self.mesh.set_positions(np.array([p1, p2, p3]))
-
-    def get_render_mat(self, camera):
-        return self.__render_mat
 
     def render(self, camera):
         super(ScenePlane, self).render(camera)

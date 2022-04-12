@@ -5,11 +5,13 @@ from PyQt5.QtCore import Qt
 
 
 class Camera(BaseTransform):
-    default_position = glm.vec3(0, 0, -5)
+    default_position = glm.vec3(-5, 2, -5)
+    default_rotation = glm.quat(glm.vec3(0.3, 0.4, 0.3))
 
     def __init__(self, width, height):
         super(Camera, self).__init__()
         self.translation = self.default_position
+        self.rotation = glm.quat()
         self.fov = 60
         self.min_z = 0.01
         self.max_z = 100
@@ -17,7 +19,7 @@ class Camera(BaseTransform):
         self.height = height
 
     def get_view_mat(self):
-        return glm.lookAt(self.translation, self.translation + self.get_forward(), glm.vec3(0, 1, 0))
+        return glm.lookAt(self.translation, self.translation + self.get_forward(), self.get_up())
 
     def get_proj_mat(self):
         return glm.perspective(glm.radians(self.fov), self.width / self.height, self.min_z, self.max_z)
@@ -32,17 +34,11 @@ class Camera(BaseTransform):
         return ((device_space + 1) / 2) * glm.vec2(self.width, self.height)
 
     def screen_to_world(self, pos):
-        inv = glm.inverse(self.get_proj_mat() * self.get_view_mat())
-
-        near = glm.vec4((pos.x - self.width / 2) / self.width * 2,
-                        -1 * (pos.y - self.height / 2) / self.height * 2, -1, 1.0)
-        far = glm.vec4((pos.x - self.width / 2) / self.width * 2,
-                       -1 * (pos.y - self.height / 2) / self.height * 2, 1, 1.0)
-        near_res = inv * near
-        far_res = inv * far
-        near_res /= near_res.w
-        far_res /= far_res.w
-        return glm.normalize(glm.vec3(far_res - near_res))
+        screen = glm.vec4(2.0 * pos.x / self.width - 1, -(2.0 * pos.y / self.height - 1), -1, 1)
+        view = glm.inverse(self.get_proj_mat()) * screen
+        view = glm.vec4(view.x, view.y, -1, 0)
+        ray = glm.inverse(self.get_view_mat()) * view
+        return glm.normalize(glm.vec3(ray))
 
     def to_device_space_2d(self, vec3):
         clip_space = self.get_proj_mat() * (self.get_view_mat() * glm.vec4(vec3, 1))
@@ -79,9 +75,6 @@ class Camera(BaseTransform):
                 top_left_far, top_right_far, bot_left_far, bot_right_far]
 
 
-from shared import EditorShared
-
-
 class CameraController:
     def __init__(self, camera):
         self.camera = camera
@@ -91,6 +84,7 @@ class CameraController:
 
         self.__last_mouse_pos = glm.vec2()
         self.__mouse_rotating = False
+        self.__rotation_eulers = glm.eulerAngles(camera.rotation)
 
     def handle_scroll(self, gl_widget, event):
         scroll = event.angleDelta().y()
@@ -112,19 +106,12 @@ class CameraController:
 
         delta *= self.mouse_sensitivity
         self.__last_mouse_pos = pos
-
-        self.camera.rotate_by(-delta.y, delta.x, 0)
+        self.__rotation_eulers += glm.vec3(-delta.y, delta.x, 0)
+        self.camera.rotation = glm.quat(self.__rotation_eulers)
         gl_widget.update()
 
     def handle_mouse_press(self, gl_widget, event):
         button = event.button()
-        if button == Qt.LeftButton:
-            p = event.pos()
-            d = self.camera.screen_to_world(glm.vec2(p.x(), p.y()))
-            print(d)
-            pos = self.camera.translation + 5 * d
-            EditorShared.get_editor().create_point(pos.x, pos.y, pos.x)
-
         if button != Qt.MiddleButton:
             return
         pos = event.pos()

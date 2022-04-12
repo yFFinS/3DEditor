@@ -112,8 +112,6 @@ class BasePlane(BaseGeometryObject):
 
 class PlaneBy3Points(BasePlane):
     def __init__(self, point1, point2, point3):
-        if is_coplanar(point1, point2, point3):
-            raise Exception("Ожидались некомпланарные точки")
         self.point1 = point1
         self.point2 = point2
         self.point3 = point3
