@@ -45,7 +45,7 @@ def generate_object_by_deserialized_data(id, data, all_objects_data):
                                   name=data["name"],
                                   point1=generate_object_by_deserialized_data(data["forming objects"][0],
                                                                              all_objects_data[
-                                                                                 data["forming objects"][0]],
+                                                                             data["forming objects"][0]],
                                                                              all_objects_data),
                                   point2=generate_object_by_deserialized_data(data["forming objects"][1],
                                                                              all_objects_data[

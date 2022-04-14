@@ -34,6 +34,14 @@ class BaseGeometryObject:
     def get_serializing_dict(self):
         pass
 
+    def __add__(self, other):
+        summary = self.xyz + other.xyz
+        return Point(summary.x, summary.y, summary.z)
+
+    def __sub__(self, other):
+        differ = self.xyz - other.xyz
+        return Point(differ.x, differ.y, differ.z)
+
 
 class Point(BaseGeometryObject):
     __counter = 1
@@ -101,7 +109,17 @@ class BaseLine(BaseGeometryObject):
         if len(glm.cross(dir_vec1, dir_vec2)) == 0:
             return None
         # TODO: отлетаешь
-        return None
+        a1 = self.get_pivot_points()[0].xyz
+        a2 = line.get_pivot_points()[0].xyz
+        if abs((dir_vec1.x * dir_vec2.y - dir_vec2.x)) > 1e-9:
+            coef = (a2.x - a1.x + a1.y * dir_vec1.x - a2.x * dir_vec1.x) / (dir_vec1.x * dir_vec2.y - dir_vec2.x)
+            return a2 + coef * dir_vec2
+        elif abs((dir_vec1.x * dir_vec2.z - dir_vec2.x)) > 1e-9:
+            coef = (a2.x - a1.x + a1.z * dir_vec1.x - a2.x * dir_vec1.x) / (dir_vec1.x * dir_vec2.z - dir_vec2.x)
+            return a2 + coef * dir_vec2
+        else:
+            coef = (a2.y - a1.y + a1.z * dir_vec1.y - a2.y * dir_vec1.y) / (dir_vec1.y * dir_vec2.z - dir_vec2.y)
+            return a2 + coef * dir_vec2
 
 
 class LineBy2Points(BaseLine):
