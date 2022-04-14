@@ -3,12 +3,12 @@ import uuid
 
 
 class BaseGeometryObject:
-
-    def __init__(self, name, id = None):
-        if id == None:
+    def __init__(self, object_type, name=None, id=None):
+        if id is None:
             self.__id = str(uuid.uuid4())
         else:
             self.__id = id
+        self.__type = object_type
         self.name = name
 
     @property
@@ -36,26 +36,34 @@ class BaseGeometryObject:
 
 
 class Point(BaseGeometryObject):
-    def __init__(self, name, x, y, z, id=None):
+    __counter = 1
+
+    def __init__(self, pos, name=None, id=None):
+        if name is None:
+            name = f'Point{Point.__counter}'
+            Point.__counter += 1
         super(Point, self).__init__(name, id)
         self.__type = "point"
-        self.x = x
-        self.y = y
-        self.z = z
-        self.__position = glm.vec3(x, y, z)
-        self.name = name
+        self.pos = pos
 
     @property
-    def xyz(self):
-        """Возвращает координаты точки в виде вектора"""
-        return self.__position
+    def x(self):
+        return self.pos.x
+
+    @property
+    def y(self):
+        return self.pos.y
+
+    @property
+    def z(self):
+        return self.pos.z
 
     def get_serializing_dict(self):
-        return { self.id :
+        return {self.id:
             {
-                "type" : self.type,
-                "name" : self.name,
-                "forming objects" : [self.x, self.y, self.z]
+                "type": self.type,
+                "name": self.name,
+                "forming objects": [self.x, self.y, self.z]
             }
         }
 
@@ -70,9 +78,13 @@ class Point(BaseGeometryObject):
 
 
 class BaseLine(BaseGeometryObject):
+    __counter = 0
 
-    def __init__(self, name):
-        super(BaseLine, self).__init__(name)
+    def __init__(self, name=None, id=None):
+        if name is None:
+            name = f'Line{BaseLine.__counter}'
+            BaseLine.__counter += 1
+        super(BaseLine, self).__init__(name, id)
         self.__type = "line"
 
     def get_pivot_points(self):
@@ -88,11 +100,12 @@ class BaseLine(BaseGeometryObject):
         dir_vec2 = line.get_directional_vector()
         if len(glm.cross(dir_vec1, dir_vec2)) == 0:
             return None
-            raise Exception("Прямые параллельны") #Кажется нам не нужны совпадающие прямые
+        # TODO: отлетаешь
+        return None
 
 
 class LineBy2Points(BaseLine):
-    def __init__(self, name, point1, point2, id=None):
+    def __init__(self, point1, point2, name=None, id=None):
         super(LineBy2Points, self).__init__(name, id)
         self.point1 = point1
         self.point2 = point2
@@ -154,14 +167,20 @@ class LineByPointAndLine(BaseLine):
 
 
 class BasePlane(BaseGeometryObject):
-    def __init__(self, name, id=None):
-        super(BasePlane, self).__init__(name, id)
-        self.__type = "plane"
+    __counter = 1
+
+    def __init__(self, name=None, id=None):
+        if name is None:
+            name = f'Plane{BasePlane.__counter}'
+            BasePlane.__counter += 1
+
+        super(BasePlane, self).__init__("plane", name, id)
 
     @staticmethod
     def is_coplanar(point1, point2, point3):
         """Возвращает True, если точки компланарны и False в противном случае"""
-        mixed = glm.dot(glm.cross(point1 - point2, point2 - point3), point3 - point1)
+        mixed = glm.dot(glm.cross(point1 - point2, point2 - point3),
+                        point3 - point1)
         return abs(mixed) < 1e-9
 
     def get_pivot_points(self):
@@ -174,10 +193,7 @@ class BasePlane(BaseGeometryObject):
 
 
 class PlaneBy3Points(BasePlane):
-    def __init__(self, name, point1, point2, point3, id=None):
-        if is_coplanar(point1.xyz, point2.xyz, point3.xyz):
-            #А вот что делать в ините хз
-            raise Exception("Ожидались некомпланарные точки")
+    def __init__(self, point1, point2, point3, name=None, id=None):
         super(PlaneBy3Points, self).__init__(name, id)
         self.point1 = point1
         self.point2 = point2
@@ -188,7 +204,8 @@ class PlaneBy3Points(BasePlane):
             {
                 "type": self.type,
                 "name": self.name,
-                "forming objects": [self.point1.id, self.point2.id, self.point3.id]
+                "forming objects": [self.point1.id, self.point2.id,
+                                    self.point3.id]
             }
         }
 
@@ -202,14 +219,15 @@ class PlaneBy3Points(BasePlane):
         pass
 
     def get_pivot_points(self):
-        return self.point1.xyz, self.point2.xyz, self.point3.xyz
+        return self.point1.pos, self.point2.pos, self.point3.pos
 
     def get_direction_vectors(self):
-        return self.point2.xyz - self.point1.xyz, self.point3.xyz - self.point2.xyz
+        return self.point2.pos - self.point1.pos, \
+               self.point3.pos - self.point2.pos
 
 
 class PlaneByPointAndPlane(BasePlane):
-    def __init__(self, name, point, plane, id=None):
+    def __init__(self, point, plane, name=None, id=None):
         super(PlaneByPointAndPlane, self).__init__(name, id)
         self.point = point
         self.plane = plane
@@ -234,16 +252,16 @@ class PlaneByPointAndPlane(BasePlane):
 
     def get_pivot_points(self):
         dir_vectors = self.get_direction_vectors()
-        return self.point.xyz, self.point.xyz + dir_vectors[0], self.point.xyz + dir_vectors[1]
+        return self.point.pos, self.point.pos + dir_vectors[0], \
+               self.point.pos + dir_vectors[1]
 
     def get_direction_vectors(self):
         return self.plane.get_directional_vectors()
 
 
 class Segment(BaseGeometryObject):
-    def __init__(self, point1, point2, id=None):
-        super(Segment, self).__init__(name, id)
-        self.__type = "segment"
+    def __init__(self, point1, point2, name=None, id=None):
+        super(Segment, self).__init__('segment', name, id)
         self.point1 = point1
         self.point2 = point2
 
@@ -265,46 +283,47 @@ class Segment(BaseGeometryObject):
     def get_dist_to_plane(self, plane):
         pass
 
-    @property
     def get_vec(self):
-        return self.point2.xyz - self.point1.xyz
+        return self.point2.pos - self.point1.pos
 
-    @property
     def get_line(self):
-        return line(self.point1, self.point2)
+        return LineBy2Points(self.point1, self.point2)
 
     def get_intersection_with_line(self, line):
         segment_line = self.get_line()
         intersection = segment_line.get_intersection_with_line(line)
         vec_with_intersection = intersection - self.point1
-        if glm.dot(vec_with_intersection, self.get_vec) < -1e-9 or len(vec_with_intersection) > len(self.get_vec) + 1e-9:
-            raise Exception("Пересечение вне отрезка")
+        if glm.dot(vec_with_intersection, self.get_vec()) < -1e-9 or len(
+                vec_with_intersection) > len(self.get_vec()) + 1e-9:
+            return None
         return intersection
 
     def get_intersection_with_segment(self, segment):
-        intersect1 = segment.get_intersection_with_line(self.get_line)
-        intersect2 = self.get_intersection_with_line(segment.get_line)
+        intersect1 = segment.get_intersection_with_line(self.get_line())
+        intersect2 = self.get_intersection_with_line(segment.get_line())
         return intersect1
 
+
 class BaseVolumetricBody(BaseGeometryObject):
-    def __init__(self, name, points, id=None ):
-        super(BaseVolumetricBody, self).__init__(name, id)
+    def __init__(self, points, name=None, id=None):
+        super(BaseVolumetricBody, self).__init__('base_3d_body', name, id)
         self.points = points
-        self.__type = "base_3d_body"
 
     def get_dist_to_plane(self, plane):
         raise Exception("Not implement")
+
     def get_dist_to_line(self, line):
         raise Exception("Not implement")
+
     def get_dist_to_point(self, point):
         raise Exception("Not implement")
 
     def get_serializing_dict(self):
-        return {self.id :
+        return {self.id:
             {
-            "name" : self.name,
-            "type" : self.type,
-            "forming objects" : self.points
+                "name": self.name,
+                "type": self.type,
+                "forming objects": self.points
             }
         }
 
