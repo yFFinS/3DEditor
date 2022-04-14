@@ -320,6 +320,24 @@ class SceneObjectList(QListWidget):
 
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.itemSelectionChanged.connect(self.selection_changed_callback)
+        self.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress:
+            kp = QKeyEvent(event)
+            if kp.key() == Qt.Key_Delete:
+                self.delete_selected()
+                return True
+        return super(SceneObjectList, self).eventFilter(obj, event)
+
+    def delete_selected(self):
+        for item in self.selectedItems():
+            widget = self.itemWidget(item)
+            obj = widget.get_object()
+            EditorShared.get_scene().remove_object(obj)
+            del self.__object_to_item[obj]
+            self.removeItemWidget(item)
+            self.takeItem(self.row(item))
 
     def deselect_all(self):
         for i in range(self.count()):
@@ -333,7 +351,8 @@ class SceneObjectList(QListWidget):
         for i in range(self.count()):
             item = self.item(i)
             widget = self.itemWidget(item)
-            widget.get_object().selected = item.isSelected()
+            if widget is not None:
+                widget.get_object().selected = item.isSelected()
         EditorShared.get_gl_widget().update()
 
     def add_scene_object_widget(self, so_widget):

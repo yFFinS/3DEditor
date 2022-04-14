@@ -29,7 +29,9 @@ class BaseTransform:
         return self.rotation * glm.vec3(0, 1, 0)
 
     def get_model_mat(self):
-        return glm.translate(self.translation) * glm.mat4_cast(self.rotation) * glm.scale(self.scale)
+        return glm.translate(self.translation) * \
+               glm.mat4_cast(self.rotation) * \
+               glm.scale(self.scale)
 
 
 class SceneObject(BaseTransform):
