@@ -35,8 +35,8 @@ class Window(QMainWindow):
 
 
 class SceneActions(QWidget):
-    def __init__(self, *args):
-        super(SceneActions, self).__init__(*args)
+    def __init__(self, editor):
+        super(SceneActions, self).__init__(editor)
         layout = QVBoxLayout()
         self.setLayout(layout)
         self.__buttons = []
@@ -45,6 +45,8 @@ class SceneActions(QWidget):
             btn = QPushButton(text, self)
             btn.setStyleSheet("background-color : grey")
             btn.pressed.connect(action)
+            if not self.__buttons:
+                self.set_button_selected(btn)
             self.__buttons.append(btn)
             layout.addWidget(btn)
 
@@ -63,27 +65,27 @@ class SceneActions(QWidget):
 
     def action_move(self):
         self.set_button_selected(self.sender())
-        EditorShared.get_gl_widget().no_action()
+        self.parent().get_gl_widget().no_action()
 
     def action_point(self):
         self.set_button_selected(self.sender())
-        EditorShared.get_gl_widget().create_point()
+        self.parent().get_gl_widget().create_point()
 
     def action_line(self):
         self.set_button_selected(self.sender())
-        EditorShared.get_gl_widget().create_line()
+        self.parent().get_gl_widget().create_line()
 
     def action_plane(self):
         self.set_button_selected(self.sender())
-        EditorShared.get_gl_widget().create_plane()
+        self.parent().get_gl_widget().create_plane()
 
 
 class EditorGUI(QWidget):
     def __init__(self):
         super(EditorGUI, self).__init__()
 
-        self.__gl_widget = GlSceneWidget(self)
         self.__scene_exp = SceneExplorer(self)
+        self.__gl_widget = GlSceneWidget(self, self.__scene_exp)
         self.__scene_act = SceneActions(self)
 
         self.__mainLayout = QHBoxLayout()
@@ -108,13 +110,14 @@ class EditorGUI(QWidget):
 
 
 class GlSceneWidget(QGLWidget):
-    def __init__(self, parent=None):
-        super(GlSceneWidget, self).__init__(parent)
+    def __init__(self, editor, scene_explorer):
+        super(GlSceneWidget, self).__init__(editor)
         self.__program = None
         self.__scene = Scene()
         self.__camera_controller = None
         self.__last_action = None
         self.__selected_objects = []
+        self.__scene_explorer = ref(scene_explorer)
 
         self.__geometry_builder = None
 
@@ -200,35 +203,18 @@ class GlSceneWidget(QGLWidget):
             self.__geometry_builder = None
             self.__last_action()
 
-
         self.update()
 
     def try_select_scene_object(self, event):
-        to_select = None
-        select_w = -1
-
         x, y = event.x(), event.y()
-        camera = self.__scene.camera
-        for obj in self.__scene.get_objects():
-            if obj in self.__selected_objects:
-                continue
-            weight = obj.get_selection_weight(camera, x, camera.height - y)
-            if weight is None:
-                continue
-            if weight < 0 or weight > 1:
-                raise ValueError(f"Вес должен быть от 0 до 1. Был {weight}.")
-            if weight > select_w:
-                select_w = weight
-                to_select = obj
+        to_select = self.__scene.try_select_object(x, y)
 
         mods = event.modifiers()
-        se = EditorShared.get_scene_explorer()
+        se = self.__scene_explorer()
 
         if not to_select or not Qt.ShiftModifier & mods:
             se.clear_selection()
-            self.__selected_objects.clear()
         if to_select:
-            self.__selected_objects.append(to_select)
             to_select.selected = True
             se.set_scene_object_selected(to_select, True)
 
@@ -236,8 +222,8 @@ class GlSceneWidget(QGLWidget):
 
 
 class SceneExplorer(QWidget):
-    def __init__(self, *args):
-        super(SceneExplorer, self).__init__(*args)
+    def __init__(self, editor):
+        super(SceneExplorer, self).__init__(editor)
 
         self.__mainLayout = QVBoxLayout()
         self.__list = SceneObjectList(self)
@@ -261,10 +247,16 @@ class SceneExplorer(QWidget):
 
     def set_scene_object_selected(self, scene_object, value):
         self.__list.set_scene_object_selected(scene_object, value)
+        selected = self.__list.get_selected_items()
+        if len(selected) == 1:
+            self.update_property(selected[0])
+        else:
+            self.__props.clear()
 
     def update_property(self, item):
         widget = self.__list.itemWidget(item)
         self.__props.set_object(widget.get_object())
+        EditorShared.get_editor().update()
         
 
 class SceneObjectProperties(QWidget):
@@ -279,9 +271,9 @@ class SceneObjectProperties(QWidget):
         self.x_edit = QLineEdit(self)
         self.y_edit = QLineEdit(self)
         self.z_edit = QLineEdit(self)
-        self.x_edit.textChanged.connect(self.update_object)
-        self.y_edit.textChanged.connect(self.update_object)
-        self.z_edit.textChanged.connect(self.update_object)
+        self.x_edit.editingFinished.connect(self.update_object)
+        self.y_edit.editingFinished.connect(self.update_object)
+        self.z_edit.editingFinished.connect(self.update_object)
 
         xyz_layout.addWidget(self.x_edit)
         xyz_layout.addWidget(self.y_edit)
@@ -289,8 +281,15 @@ class SceneObjectProperties(QWidget):
         self.__xyz.setLayout(xyz_layout)
         layout.addWidget(self.__xyz)
 
+    def clear(self):
+        self.x_edit.setText("")
+        self.y_edit.setText("")
+        self.z_edit.setText("")
+        self.__xyz.setDisabled(True)
+
     def set_object(self, scene_object):
         self.__so = scene_object
+        self.__xyz.setEnabled(True)
         self.update_props()
 
     def update_props(self):
@@ -335,7 +334,7 @@ class SceneObjectList(QListWidget):
             item = self.item(i)
             widget = self.itemWidget(item)
             widget.get_object().selected = item.isSelected()
-        EditorShared.get_editor().update()
+        EditorShared.get_gl_widget().update()
 
     def add_scene_object_widget(self, so_widget):
         item = QListWidgetItem()
@@ -344,8 +343,19 @@ class SceneObjectList(QListWidget):
         self.setItemWidget(item, so_widget)
         self.__object_to_item[so_widget.get_object()] = item
 
+    def get_selected_items(self):
+        selected = []
+        for i in range(self.count()):
+            item = self.item(i)
+            if item.isSelected():
+                selected.append(item)
+        return selected
+
+    def get_scene_object_item(self, scene_object):
+        return self.__object_to_item[scene_object]
+
     def set_scene_object_selected(self, scene_object, value):
-        item = self.__object_to_item[scene_object]
+        item = self.get_scene_object_item(scene_object)
         item.setSelected(value)
         widget = self.itemWidget(item)
         widget.get_object().selected = value

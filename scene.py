@@ -45,6 +45,9 @@ class SceneObject(BaseTransform):
     def get_render_mat(self, camera):
         return camera.get_mvp(self.get_model_mat())
 
+    def get_selection_mask(self):
+        return 0
+
     def set_position(self, x, y, z):
         self.translation = glm.vec3(x, y, z)
 
@@ -99,3 +102,19 @@ class Scene:
     def unload(self):
         self.__objects.clear()
         self.camera = None
+
+    def try_select_object(self, x, y, mask=0xFFFFFFFF):
+        to_select = None
+        select_w = -1
+        for obj in self.get_objects():
+            if obj.selected or (mask & obj.get_selection_mask()) == 0:
+                continue
+            weight = obj.get_selection_weight(self.camera, x, self.camera.height - y)
+            if weight is None:
+                continue
+            if weight < 0 or weight > 1:
+                raise ValueError(f"Вес должен быть от 0 до 1. Был {weight}.")
+            if weight > select_w:
+                select_w = weight
+                to_select = obj
+        return to_select

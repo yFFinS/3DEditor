@@ -7,6 +7,11 @@ from scene import SceneObject, Mesh
 from helpers import *
 
 
+SELECT_POINT = 1 << 0
+SELECT_LINE = 1 << 1
+SELECT_PLANE = 1 << 2
+
+
 class ScenePoint(SceneObject):
     def __init__(self, point):
         super(ScenePoint, self).__init__()
@@ -18,6 +23,9 @@ class ScenePoint(SceneObject):
         self.mesh.set_positions(np.array([glm.vec3(0, 0, 0)]))
         self.mesh.set_indices(as_uint32_array(0))
         self.mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)]))
+
+    def get_selection_mask(self):
+        return SELECT_POINT
 
     def set_position(self, x, y, z):
         self.point.position = glm.vec3(x, y, z)
@@ -43,6 +51,9 @@ class SceneLine(SceneObject):
         self.render_mode = GL.GL_LINES
 
         self.update_mesh(self.line.point1.position, self.line.point2.position)
+
+    def get_selection_mask(self):
+        return SELECT_LINE
 
     def get_render_mat(self, camera):
         return camera.get_proj_mat() * camera.get_view_mat()
@@ -84,6 +95,9 @@ class ScenePlane(SceneObject):
         self.update_mesh(self.plane.point1.xyz, self.plane.point2.xyz, self.plane.point3.xyz)
         self.mesh.set_indices(to_uint32_array([0, 1, 2]))
         self.mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1), glm.vec4(0, 0, 0, 1)]))
+
+    def get_selection_mask(self):
+        return SELECT_PLANE
 
     def update_mesh(self, p1, p2, p3):
         self.mesh.set_positions(np.array([p1, p2, p3]))

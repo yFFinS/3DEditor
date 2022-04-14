@@ -20,6 +20,9 @@ class BaseBuilder:
     def on_click(self, pos):
         raise NotImplementedError
 
+    def try_snap_to(self, x, y, mask):
+        return self.scene().try_select_object(x, y, mask)
+
 
 class PointBuilder(BaseBuilder):
     def on_click(self, pos):
@@ -39,10 +42,16 @@ class LineBuilder(BaseBuilder):
 
     def on_click(self, pos):
         camera = self.scene().camera
-        ray = camera.screen_to_world(pos)
-        place = camera.translation + BaseBuilder.base_click_depth * ray
-        point = ScenePoint(Point(place.x, place.y, place.z))
-        self.push_object(point)
+        snap = self.try_snap_to(pos.x, pos.y, SELECT_POINT)
+        if snap:
+            if snap == self.p1:
+                return False
+            point = snap
+        else:
+            ray = camera.screen_to_world(pos)
+            place = camera.translation + BaseBuilder.base_click_depth * ray
+            point = ScenePoint(Point(place.x, place.y, place.z))
+            self.push_object(point)
         if self.p1:
             line = SceneLine(LineBy2Points(self.p1.point, point.point))
             self.push_object(line)
@@ -60,10 +69,16 @@ class PlaneBuilder(BaseBuilder):
 
     def on_click(self, pos):
         camera = self.scene().camera
-        ray = camera.screen_to_world(pos)
-        place = camera.translation + BaseBuilder.base_click_depth * ray
-        point = ScenePoint(Point(place.x, place.y, place.z))
-        self.push_object(point)
+        snap = self.try_snap_to(pos.x, pos.y, SELECT_POINT)
+        if snap:
+            if snap == self.p1 or snap == self.p2:
+                return False
+            point = snap
+        else:
+            ray = camera.screen_to_world(pos)
+            place = camera.translation + BaseBuilder.base_click_depth * ray
+            point = ScenePoint(Point(place.x, place.y, place.z))
+            self.push_object(point)
         if self.p2:
             plane = ScenePlane(PlaneBy3Points(self.p1.point, self.p2.point, point.point))
             self.push_object(plane)
