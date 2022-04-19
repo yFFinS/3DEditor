@@ -18,9 +18,10 @@ def deserialize(file_name):
     """По json файлу возвращает список объектов сцены"""
     file = open(f"{file_name}.json", "r")
     data = json.load(file)
-    objects = list()
+    objects = dict()
     for id in data.keys():
-        objects.append(generate_object_by_deserialized_data(id, data[id], data))
+        # TODO: Изменить чтоб Бим бим бам бам
+        generate_object_by_deserialized_data(id, data[id], data, objects)
     return objects
 
 if __name__ == "__main__":
