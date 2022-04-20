@@ -38,7 +38,7 @@ class SceneObject(BaseTransform):
     def __init__(self):
         super(SceneObject, self).__init__()
         self.mesh = None
-        self.shader_program = self.default_shader_program
+        self.shader_program = SceneObject.default_shader_program
         self.render_mode = GL.GL_TRIANGLES
         self.selected = False
 
