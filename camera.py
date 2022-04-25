@@ -12,9 +12,9 @@ class Camera(BaseTransform):
         super(Camera, self).__init__()
         self.translation = self.default_position
         self.rotation = glm.quat()
-        self.fov = 60
+        self.fov = 100
         self.min_z = 0.01
-        self.max_z = 100
+        self.max_z = 10000
         self.width = width
         self.height = height
 
@@ -76,52 +76,68 @@ class Camera(BaseTransform):
 
 
 class CameraController:
+    IDLE = 0
+    ROTATING = 1
+    MOVING = 2
+
     def __init__(self, camera):
         self.camera = camera
+        self.scroll_speed = 0.3
         self.move_speed = 0.1
-        self.mouse_sensitivity = 0.003
+        self.rotate_speed = 0.003
         self.min_rotate_delta = 1
 
         self.__last_mouse_pos = glm.vec2()
-        self.__mouse_rotating = False
+        self.__state = CameraController.IDLE
         self.__rotation_eulers = glm.eulerAngles(camera.rotation)
 
     def handle_scroll(self, gl_widget, event):
         scroll = event.angleDelta().y()
-        self.camera.move_by(0, 0, glm.sign(scroll) * self.move_speed)
-
+        self.camera.move_by(0, 0, glm.sign(scroll) * self.scroll_speed)
         gl_widget.update()
 
     def handle_mouse_move(self, gl_widget, event):
-        if not self.__mouse_rotating:
+        if self.__state == CameraController.IDLE:
             return
+
         pos = event.pos()
         pos = glm.vec2(pos.x(), pos.y())
         delta = pos - self.__last_mouse_pos
-
-        if abs(delta.x) < self.min_rotate_delta:
-            delta.x = 0
-        if abs(delta.y) < self.min_rotate_delta:
-            delta.y = 0
-
-        delta *= self.mouse_sensitivity
         self.__last_mouse_pos = pos
-        self.__rotation_eulers += glm.vec3(-delta.y, delta.x, 0)
-        self.camera.rotation = glm.quat(self.__rotation_eulers)
+
+        if self.__state == CameraController.ROTATING:
+            self.__rotate(delta)
+        elif self.__state == CameraController.MOVING:
+            self.__move(delta)
+
         gl_widget.update()
 
     def handle_mouse_press(self, gl_widget, event):
         button = event.button()
-        if button != Qt.MiddleButton:
-            return
         pos = event.pos()
         pos = glm.vec2(pos.x(), pos.y())
-        self.__last_mouse_pos = pos
-        self.__mouse_rotating = True
+
+        if button == Qt.RightButton:
+            self.__start_rotating(pos)
+        elif button == Qt.MiddleButton:
+            self.__start_moving(pos)
 
     def handle_mouse_release(self, gl_widget, event):
-        button = event.button()
-        if button != Qt.MiddleButton:
-            return
-        self.__last_mouse_pos = glm.vec2()
-        self.__mouse_rotating = False
+        self.__state = CameraController.IDLE
+
+    def __start_rotating(self, pivot):
+        self.__last_mouse_pos = pivot
+        self.__state = CameraController.ROTATING
+
+    def __start_moving(self, pivot):
+        self.__last_mouse_pos = pivot
+        self.__state = CameraController.MOVING
+
+    def __rotate(self, delta):
+        delta *= self.rotate_speed
+        self.__rotation_eulers += glm.vec3(-delta.y, delta.x, 0)
+        self.camera.rotation = glm.quat(self.__rotation_eulers)
+
+    def __move(self, delta):
+        move = glm.vec3(delta.x, delta.y, 0) * self.move_speed
+        self.camera.move_by(*move)

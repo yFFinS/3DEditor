@@ -1,4 +1,3 @@
-import glm
 from weakref import ref
 
 from render_geometry import *

@@ -63,7 +63,7 @@ class SceneActions(QWidget):
 
     def action_move(self):
         self.set_button_selected(self.sender())
-        EditorShared.get_gl_widget().no_action()
+        EditorShared.get_gl_widget().move_object()
 
     def action_point(self):
         self.set_button_selected(self.sender())
@@ -139,9 +139,8 @@ class GlSceneWidget(QGLWidget):
         self.__camera_controller = CameraController(self.__scene.camera)
         SceneObject.default_shader_program = self.__program
 
-        self.__scene.add_object(SceneCoordAxisX())
-        self.__scene.add_object(SceneCoordAxisY())
-        self.__scene.add_object(SceneCoordAxisZ())
+        self.__scene.add_object(SceneGrid())
+        self.__scene.add_object(SceneCoordAxis())
 
     def resizeGL(self, w, h):
         if w <= 0 or h <= 0:
@@ -180,6 +179,10 @@ class GlSceneWidget(QGLWidget):
         self.__geometry_builder = None
         self.__last_action = self.no_action
 
+    def move_object(self):
+        self.__geometry_builder = None
+        self.__last_action = self.move_object
+
     def create_point(self):
         self.__geometry_builder = PointBuilder(self.get_scene(), EditorShared.get_scene_explorer())
         self.__last_action = self.create_point
@@ -192,6 +195,10 @@ class GlSceneWidget(QGLWidget):
         self.__geometry_builder = PlaneBuilder(self.get_scene(), EditorShared.get_scene_explorer())
         self.__last_action = self.create_plane
 
+    def handle_move_object(self, event):
+        # TODO:
+        pass
+
     def handle_geometry_builder(self, event):
         pe = event.pos()
         pos = glm.vec2(pe.x(), pe.y())
@@ -199,7 +206,6 @@ class GlSceneWidget(QGLWidget):
         if ready:
             self.__geometry_builder = None
             self.__last_action()
-
 
         self.update()
 

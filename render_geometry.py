@@ -1,10 +1,12 @@
 import OpenGL.GL as GL
-import glm
-import numpy as np
+import math
 
 from geometry import *
 from scene import SceneObject, Mesh
 from helpers import *
+
+
+SCALING_FACTOR = 2
 
 
 class ScenePoint(SceneObject):
@@ -14,7 +16,8 @@ class ScenePoint(SceneObject):
         self.translation = point.position
         self.point = point
         self.render_mode = GL.GL_POINTS
-        self.mesh = Mesh()
+        self.render_layer = 4
+
         self.mesh.set_positions(np.array([glm.vec3(0, 0, 0)]))
         self.mesh.set_indices(as_uint32_array(0))
         self.mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)]))
@@ -39,10 +42,10 @@ class SceneLine(SceneObject):
         super(SceneLine, self).__init__()
 
         self.line = line
-        self.mesh = Mesh()
         self.render_mode = GL.GL_LINES
+        self.render_layer = 3
 
-        self.update_mesh(self.line.point1.position, self.line.point2.position)
+        self.update_mesh(self.line.point1.xyz, self.line.point2.xyz)
 
     def get_render_mat(self, camera):
         return camera.get_proj_mat() * camera.get_view_mat()
@@ -67,17 +70,19 @@ class SceneLine(SceneObject):
 
         # TODO: Умом
         dir_v = self.line.get_directional_vector()
-        self.update_mesh(p1 + 10000 * dir_v, p2 - 10000 * dir_v)
+        self.update_mesh(p1 + 1000 * dir_v, p2 - 1000 * dir_v)
 
+        GL.glLineWidth(1)
         super(SceneLine, self).render(camera)
 
 
 class ScenePlane(SceneObject):
     def __init__(self, plane):
         super(ScenePlane, self).__init__()
+
         self.plane = plane
-        self.mesh = Mesh()
         self.render_mode = GL.GL_TRIANGLES
+        self.render_layer = 2
 
         self.__render_mat = None
 
@@ -92,56 +97,100 @@ class ScenePlane(SceneObject):
         super(ScenePlane, self).render(camera)
 
 
-axis_line_extent = 10000
-axis_line_color = glm.vec4(0.4, 0, 0.7, 1)
+AXIS_EXTENTS = 20
 
 
-class SceneCoordAxisX(SceneObject):
+class SceneCoordAxis(SceneObject):
     def __init__(self):
-        super(SceneCoordAxisX, self).__init__()
+        super(SceneCoordAxis, self).__init__()
 
         self.render_mode = GL.GL_LINES
+        self.render_layer = -1
+        self.scale = glm.vec3(2)
 
-        self.mesh = Mesh()
-        self.mesh.set_positions(
-            np.array([
-                glm.vec3(-axis_line_extent, 0, 0),
-                glm.vec3(axis_line_extent, 0, 0)
+        self.populate_mesh()
+
+    def populate_mesh(self):
+        axis_line_color = glm.vec4(16 / 256, 79 / 256, 196 / 256, 1)
+
+        positions = np.array([
+                glm.vec3(-AXIS_EXTENTS, 0, 0),
+                glm.vec3(AXIS_EXTENTS, 0, 0),
+                glm.vec3(0, -AXIS_EXTENTS, 0),
+                glm.vec3(0, AXIS_EXTENTS, 0),
+                glm.vec3(0, 0, -AXIS_EXTENTS),
+                glm.vec3(0, 0, AXIS_EXTENTS)
             ])
-        )
-        self.mesh.set_indices(to_uint32_array([0, 1]))
-        self.mesh.set_colors(np.array([axis_line_color for _ in range(self.mesh.get_index_count())]))
+
+        self.mesh.set_positions(positions)
+        self.mesh.set_indices(np.array(range(len(positions))))
+        self.mesh.set_colors(np.array([axis_line_color for _ in range(len(positions))]))
+
+    def adjust_to_camera(self, camera):
+        camera_pos = camera.translation
+        scale_step = int(math.log(abs(camera_pos.y), SCALING_FACTOR))
+
+        if scale_step != self.scale.x:
+            size = 2 + SCALING_FACTOR ** scale_step
+            self.scale = glm.vec3(size)
+
+    def render(self, camera):
+        self.adjust_to_camera(camera)
+
+        GL.glLineWidth(2)
+        super(SceneCoordAxis, self).render(camera)
 
 
-class SceneCoordAxisY(SceneObject):
+class SceneGrid(SceneObject):
     def __init__(self):
-        super(SceneCoordAxisY, self).__init__()
+        super(SceneGrid, self).__init__()
 
         self.render_mode = GL.GL_LINES
+        self.render_layer = -2
+        self.cell_size = 2
+        self.scale = glm.vec3(self.cell_size)
 
-        self.mesh = Mesh()
-        self.mesh.set_positions(
-            np.array([
-                glm.vec3(0, -axis_line_extent, 0),
-                glm.vec3(0, axis_line_extent, 0)
-            ])
-        )
-        self.mesh.set_indices(to_uint32_array([0, 1]))
-        self.mesh.set_colors(np.array([axis_line_color for _ in range(self.mesh.get_index_count())]))
+        self.populate_mesh()
 
+    def populate_mesh(self):
+        half_row_count = AXIS_EXTENTS * 2
+        grid_color = glm.vec4(0.7, 0.1, 0.2, 1)
 
-class SceneCoordAxisZ(SceneObject):
-    def __init__(self):
-        super(SceneCoordAxisZ, self).__init__()
+        positions = []
+        for y in range(-half_row_count, half_row_count):
+            for x in range(-half_row_count, half_row_count):
+                pos = glm.vec3(x, 0, y) * 0.5
+                positions.append(pos)
+        indices = []
 
-        self.render_mode = GL.GL_LINES
+        row_size = 2 * half_row_count
+        for y in range(row_size):
+            for x in range(row_size):
+                if y < row_size - 1:
+                    indices.append(x + y * row_size)
+                    indices.append(x + (y + 1) * row_size)
+                if x < row_size - 1:
+                    indices.append(y * row_size + x)
+                    indices.append(y * row_size + x + 1)
 
-        self.mesh = Mesh()
-        self.mesh.set_positions(
-            np.array([
-                glm.vec3(0, 0, -axis_line_extent),
-                glm.vec3(0, 0, axis_line_extent)
-            ])
-        )
-        self.mesh.set_indices(to_uint32_array([0, 1]))
-        self.mesh.set_colors(np.array([axis_line_color for _ in range(self.mesh.get_index_count())]))
+        self.mesh.set_positions(np.array(positions))
+        self.mesh.set_indices(np.array(indices))
+        self.mesh.set_colors(np.array([grid_color for _ in range(len(positions))]))
+
+    def adjust_to_camera(self, camera):
+        camera_pos = camera.translation
+        scale_step = int(math.log(abs(camera_pos.y), SCALING_FACTOR))
+
+        if scale_step != self.scale.x:
+            self.cell_size = size = 2 + SCALING_FACTOR ** scale_step
+            self.scale = glm.vec3(self.cell_size)
+
+        cam_x, cam_z = camera_pos.x, camera_pos.z
+        self.translation.x = cam_x // self.cell_size * self.cell_size
+        self.translation.z = cam_z // self.cell_size * self.cell_size
+
+    def render(self, camera):
+        self.adjust_to_camera(camera)
+
+        GL.glLineWidth(0.3)
+        super(SceneGrid, self).render(camera)
