@@ -245,6 +245,11 @@ class SceneExplorer(QWidget):
     def clear_selection(self):
         self.__list.deselect_all()
 
+    def select_scene_object(self, scene_object, deselct_others=False):
+        if deselct_others:
+            self.__list.deselect_all()
+        self.set_scene_object_selected(scene_object, True)
+
     def set_scene_object_selected(self, scene_object, value):
         self.__list.set_scene_object_selected(scene_object, value)
         selected = self.__list.get_selected_items()

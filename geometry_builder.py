@@ -32,6 +32,7 @@ class PointBuilder(BaseBuilder):
 
         point = ScenePoint(Point(place.x, place.y, place.z))
         self.push_object(point)
+        self.scene_explorer().select_scene_object(point, True)
         return True
 
 
@@ -52,11 +53,14 @@ class LineBuilder(BaseBuilder):
             place = camera.translation + BaseBuilder.base_click_depth * ray
             point = ScenePoint(Point(place.x, place.y, place.z))
             self.push_object(point)
+
         if self.p1:
             line = SceneLine(LineBy2Points(self.p1.point, point.point))
             self.push_object(line)
+            self.scene_explorer().select_scene_object(line, True)
             return True
         else:
+            self.scene_explorer().select_scene_object(point, True)
             self.p1 = point
             return False
 
@@ -82,10 +86,13 @@ class PlaneBuilder(BaseBuilder):
         if self.p2:
             plane = ScenePlane(PlaneBy3Points(self.p1.point, self.p2.point, point.point))
             self.push_object(plane)
+            self.scene_explorer().select_scene_object(plane, True)
             return True
         elif self.p1:
+            self.scene_explorer().select_scene_object(point, False)
             self.p2 = point
             return False
         else:
+            self.scene_explorer().select_scene_object(point, True)
             self.p1 = point
             return False
