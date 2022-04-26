@@ -1,3 +1,5 @@
+import weakref
+
 import OpenGL.GL as GL
 import math
 

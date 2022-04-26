@@ -12,7 +12,7 @@ class SceneObjectWidget(QWidget):
         super(SceneObjectWidget, self).__init__()
         self.__layout = QHBoxLayout()
 
-        font = QFont("Arial", 14)
+        font = QFont("Arial", 10)
         self.__name_label = QLabel(self)
         self.__name_label.setFont(font)
 
@@ -30,6 +30,9 @@ class SceneObjectWidget(QWidget):
 
         self.__name_label.setText(text)
         self.__layout.addWidget(self.__name_label)
+        self.__layout.setContentsMargins(5, 2, 5, 2)
+        self.setFixedHeight(20)
+
         self.__scene_object = scene_object
 
         self.__layout.addStretch()

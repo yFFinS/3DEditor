@@ -3,7 +3,7 @@ from PyQt5.QtCore import QSize, QEvent, QObject, Qt
 from PyQt5.QtGui import QFont, QPalette, QKeyEvent, QMouseEvent, QWheelEvent
 from PyQt5.QtWidgets import (QVBoxLayout, QListWidgetItem, QLineEdit,
                              QHBoxLayout, QWidget, QLabel, QMainWindow,
-                             QAction, QListWidget, QAbstractItemView, QPushButton)
+                             QAction, QListWidget, QAbstractItemView, QPushButton, QSizePolicy, QSplitter, QFrame)
 from PyQt5.QtOpenGL import QGLWidget
 
 from scene import *
@@ -15,8 +15,7 @@ from geometry_builder import *
 
 class Window(QMainWindow):
     def __init__(self):
-        super().__init__()
-        self.setGeometry(500, 300, 1000, 600)
+        super(QMainWindow, self).__init__()
 
         EditorShared.init(EditorGUI())
 
@@ -36,14 +35,27 @@ class Window(QMainWindow):
 
 class SceneActions(QWidget):
     def __init__(self, editor):
-        super(SceneActions, self).__init__(editor)
-        layout = QVBoxLayout()
+        super(SceneActions, self).__init__()
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
         self.setLayout(layout)
+
+        self.__editor = ref(editor)
         self.__buttons = []
+
+        size_pol = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        size_pol.setControlType(QSizePolicy.Frame)
+        size_pol.setHorizontalStretch(1)
+        self.setSizePolicy(size_pol)
 
         def create_button(text, action):
             btn = QPushButton(text, self)
-            btn.setStyleSheet("background-color : grey")
+            btn.setStyleSheet("""
+            QPushButton[selected="true"] {
+                border: 2px inset grey;
+                }""")
+            btn.setFixedSize(QSize(60, 20))
             btn.pressed.connect(action)
             if not self.__buttons:
                 self.set_button_selected(btn)
@@ -55,13 +67,22 @@ class SceneActions(QWidget):
         create_button("Line", self.action_line)
         create_button("Plane", self.action_plane)
 
+        self.setFixedHeight(layout.sizeHint().height())
+        layout.addStretch()
+
     def set_button_selected(self, btn):
         self.deselect_all_buttons()
-        btn.setStyleSheet("background-color : green")
+        btn.setProperty("selected", "true")
+        btn.style().unpolish(btn)
+        btn.style().polish(btn)
+        btn.update()
 
     def deselect_all_buttons(self):
         for btn in self.__buttons:
-            btn.setStyleSheet("background-color : grey")
+            btn.setProperty("selected", "false")
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+            btn.update()
 
     def action_move(self):
         self.set_button_selected(self.sender())
@@ -69,32 +90,42 @@ class SceneActions(QWidget):
 
     def action_point(self):
         self.set_button_selected(self.sender())
-        self.parent().get_gl_widget().create_point()
+        self.__editor().get_gl_widget().create_point()
 
     def action_line(self):
         self.set_button_selected(self.sender())
-        self.parent().get_gl_widget().create_line()
+        self.__editor().get_gl_widget().create_line()
 
     def action_plane(self):
         self.set_button_selected(self.sender())
-        self.parent().get_gl_widget().create_plane()
+        self.__editor().get_gl_widget().create_plane()
 
 
 class EditorGUI(QWidget):
     def __init__(self):
         super(EditorGUI, self).__init__()
 
+        self.__action_splitter = QSplitter(Qt.Vertical)
+        self.__main_splitter = QSplitter(Qt.Horizontal)
+
         self.__scene_exp = SceneExplorer(self)
         self.__gl_widget = GlSceneWidget(self, self.__scene_exp)
         self.__scene_act = SceneActions(self)
 
-        self.__mainLayout = QHBoxLayout()
+        self.__action_splitter.addWidget(self.__scene_act)
+        self.__action_splitter.addWidget(self.__main_splitter)
 
-        self.__mainLayout.addWidget(self.__scene_act)
-        self.__mainLayout.addWidget(self.__scene_exp)
-        self.__mainLayout.addWidget(self.__gl_widget)
+        self.__main_splitter.addWidget(self.__scene_exp)
+        self.__main_splitter.addWidget(self.__gl_widget)
+        self.__main_splitter.setSizes([self.__scene_exp.width(), 200])
 
-        self.setLayout(self.__mainLayout)
+        self.__action_splitter.setStyleSheet("QSplitter::handle { background-color: gray }")
+        self.__main_splitter.setStyleSheet("QSplitter::handle { background-color: gray }")
+
+        layout = QHBoxLayout()
+        layout.addWidget(self.__action_splitter)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
 
     def get_scene_explorer(self):
         return self.__scene_exp
@@ -119,6 +150,11 @@ class GlSceneWidget(QGLWidget):
         self.__selected_objects = []
         self.__scene_explorer = ref(scene_explorer)
 
+        size_pol = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        size_pol.setVerticalStretch(1)
+        size_pol.setHorizontalStretch(1)
+        size_pol.setControlType(QSizePolicy.Frame)
+        self.setSizePolicy(size_pol)
         self.__geometry_builder = None
 
         self.installEventFilter(self)
@@ -126,11 +162,8 @@ class GlSceneWidget(QGLWidget):
     def get_scene(self):
         return self.__scene
 
-    def sizeHint(self):
-        return QSize(800, 640)
-
     def initializeGL(self):
-        GL.glClearColor(144 / 256, 144 / 256, 144 / 256, 1)
+        GL.glClearColor(170 / 256, 170 / 256, 170 / 256, 1)
         GL.glEnable(GL.GL_BLEND)
         GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA)
         GL.glPointSize(4)
@@ -232,19 +265,23 @@ class SceneExplorer(QWidget):
     def __init__(self, editor):
         super(SceneExplorer, self).__init__(editor)
 
-        self.__mainLayout = QVBoxLayout()
+        layout = QVBoxLayout()
         self.__list = SceneObjectList(self)
 
-        self.__list.setFixedHeight(300)
-        self.__list.setFixedWidth(300)
         self.__list.itemClicked.connect(self.update_property)
-        self.__props = SceneObjectProperties()
-        self.__props.setFixedWidth(300)
+        self.__props = SceneObjectProperties(self)
 
-        self.__mainLayout.addWidget(self.__list)
-        self.__mainLayout.addWidget(self.__props)
+        layout.addWidget(self.__props)
+        layout.addWidget(self.__list)
 
-        self.setLayout(self.__mainLayout)
+        self.setLayout(layout)
+
+        size_pol = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        size_pol.setVerticalStretch(1)
+        size_pol.setControlType(QSizePolicy.Frame)
+        self.setSizePolicy(size_pol)
+        self.setMinimumSize(200, 200)
+        self.setMaximumWidth(500)
 
     def add_scene_object_widget(self, so_widget):
         self.__list.add_scene_object_widget(so_widget)
@@ -278,6 +315,9 @@ class SceneObjectProperties(QWidget):
         self.setLayout(layout)
 
         self.__so = None
+        self.__object_name_edit = QLineEdit(self)
+        layout.addWidget(self.__object_name_edit)
+
         self.__xyz = QWidget(self)
         xyz_layout = QHBoxLayout()
         self.x_edit = QLineEdit(self)
@@ -292,6 +332,9 @@ class SceneObjectProperties(QWidget):
         xyz_layout.addWidget(self.z_edit)
         self.__xyz.setLayout(xyz_layout)
         layout.addWidget(self.__xyz)
+
+        size_pol = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        size_pol.setVerticalStretch(1)
 
     def clear(self):
         self.x_edit.setText("")
