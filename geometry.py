@@ -2,6 +2,15 @@ import glm
 
 
 class BaseGeometryObject:
+    def get_dist_to_screen_pos(self, screen_pos, transform):
+        # TODO
+        """
+        :param glm.vec2 screen_pos: Координаты точки на экране
+        :param func transform: Функция, которая переводит точку glm.vec3 в соответствующую ей точку glm.vec2 нг экране
+        :return: Расстояние от screen_pos до объекта
+        """
+        raise NotImplementedError
+
     def get_dist_to_point(self, point):
         """Возвращает дистанцию до точки"""
         pass

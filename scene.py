@@ -39,10 +39,11 @@ class SceneObject(BaseTransform):
 
     def __init__(self):
         super(SceneObject, self).__init__()
-        self.mesh = None
-        self.shader_program = self.default_shader_program
+        self.mesh = Mesh()
+        self.shader_program = SceneObject.default_shader_program
         self.render_mode = GL.GL_TRIANGLES
         self.selected = False
+        self.render_layer = 0
 
     def get_render_mat(self, camera):
         return camera.get_mvp(self.get_model_mat())
@@ -55,8 +56,8 @@ class SceneObject(BaseTransform):
 
     def get_selection_weight(self, camera, x, y):
         """
-            Возвращает значение от 0 до 1. Чем больше, тем больше приоритет выбора этого объекта.
-            Возвращает None если оьъект выбирать не нужно.
+            Возвращает значение от 0 до 1. Чем больше значение, тем больше приоритет выбора этого объекта.
+            Возвращает None, если объект выбирать не нужно.
         """
         return None
 
@@ -68,7 +69,11 @@ class SceneObject(BaseTransform):
         self.shader_program.set_float("Instance.Selected", 1 if self.selected else -1)
 
         self.mesh.bind_vba()
-        GL.glDrawElements(self.render_mode, self.mesh.get_index_count(), GL.GL_UNSIGNED_INT, None)
+        indices = self.mesh.get_index_count()
+        if indices != 0:
+            GL.glDrawElements(self.render_mode, indices, GL.GL_UNSIGNED_INT, None)
+        else:
+            GL.glDrawArrays(self.render_mode, 0, self.mesh.get_vertex_count())
         self.mesh.unbind_vba()
 
 
@@ -98,7 +103,9 @@ class Scene:
     def render(self):
         if not self.camera:
             return
-        for obj in self.__objects:
+
+        objects = [(int(obj.selected), obj.render_layer, -i, obj) for i, obj in enumerate(self.__objects)]
+        for *_, obj in sorted(objects):
             obj.render(self.camera)
 
     def unload(self):

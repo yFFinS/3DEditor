@@ -119,6 +119,9 @@ class Mesh:
     def get_index_count(self):
         return len(self.__indices)
 
+    def get_vertex_count(self):
+        return len(self.__positions)
+
     def bind_vba(self):
         self.__vba.bind()
 
