@@ -1,5 +1,6 @@
 import numpy as np
 import glm
+from PyQt5.QtGui import QMouseEvent
 
 
 def to_float32_array(array):
@@ -89,3 +90,8 @@ def intersect_line_frustum(l1, l2, frustum_edges):
     intersect(bln, brf, brn)
 
     return intersections
+
+
+def extract_pos(event: QMouseEvent) -> glm.vec2:
+    pos = event.pos()
+    return glm.vec2(pos.x(), pos.y())

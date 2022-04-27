@@ -1,4 +1,4 @@
-from Base_geometry_objects import *
+from core.Base_geometry_objects import *
 
 def generate_object_by_deserialized_data(id, data, all_objects_data, generated_objects):
     """Генерирует объект по декодированному словарю json"""

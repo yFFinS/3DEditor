@@ -1,7 +1,6 @@
 import json
-from Base_geometry_objects import *
 from scenes import *
-from generator_of_decoding_objects import generate_object_by_deserialized_data
+from core.generator_of_decoding_objects import generate_object_by_deserialized_data
 
 
 def serialize(scene, file_name):

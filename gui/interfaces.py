@@ -1,12 +1,11 @@
+import abc
+from abc import ABC, ABCMeta
+
 from PyQt5.QtGui import QMouseEvent
 
-from scene import *
-from geometry_builder import *
-
-
-class UpdateReceiverInterface:
-    def update(self):
-        raise NotImplementedError
+from core.interfaces import UpdateReceiverInterface
+from scene.scene import *
+from scene.scene_object import SceneObject
 
 
 class SceneActionsInterface:
@@ -23,8 +22,12 @@ class SceneActionsInterface:
         raise NotImplementedError
 
 
-class GlSceneInterface:
+class GLSceneInterface:
+    @abc.abstractmethod
     def get_scene(self) -> Scene:
+        raise NotImplementedError
+
+    def redraw(self):
         raise NotImplementedError
 
     def unload(self):
@@ -50,42 +53,19 @@ class GlSceneInterface:
 
 
 class SceneExplorerInterface:
+    @abc.abstractmethod
     def add_scene_object(self, scene_object: SceneObject):
         raise NotImplementedError
 
+    @abc.abstractmethod
     def clear_selection(self):
         raise NotImplementedError
 
+    @abc.abstractmethod
     def select_scene_object(self, scene_object: SceneObject,
                             deselect_others: bool = False):
         raise NotImplementedError
 
+    @abc.abstractmethod
     def deselect_scene_object(self, scene_object: SceneObject):
         raise NotImplementedError
-
-
-class SceneObjectPropertiesInterface:
-    def clear(self):
-        raise NotImplementedError
-
-    def set_scene_object(self, scene_object: SceneObject):
-        raise NotImplementedError
-
-    def update_properties(self):
-        raise NotImplementedError
-
-
-class SceneObjectListInterface:
-    def delete_selected(self):
-        raise NotImplementedError
-
-    def deselect_all(self):
-        raise NotImplementedError
-
-    def add_scene_object(self, scene_object: SceneObject):
-        raise NotImplementedError
-
-    def select_scene_object(self, scene_object: SceneObject,
-                            deselect_others: bool = False):
-        raise NotImplementedError
-
