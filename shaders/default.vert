@@ -12,6 +12,7 @@ struct InstanceProps
 };
 
 uniform InstanceProps Instance;
+vec3 SELECTED_COLOR = vec3(0 / 256.0f, 134 / 256.0f, 171 / 256.0f);
 
 void main()
 {
@@ -19,5 +20,5 @@ void main()
     if (Instance.Selected < 0)
         oColor = aColor;
     else
-        oColor = vec4(54 / 256.0f, 225 / 256.0f, 247 / 256.0f, aColor.w);
+        oColor = vec4(SELECTED_COLOR, aColor.w);
 }

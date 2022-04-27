@@ -85,7 +85,7 @@ class SceneLine(SceneObject):
         dir_v = self.line.get_directional_vector()
         self.update_mesh(p1 + 1000 * dir_v, p2 - 1000 * dir_v)
 
-        GL.glLineWidth(1)
+        GL.glLineWidth(2)
         super(SceneLine, self).render(camera)
 
 

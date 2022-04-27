@@ -1,4 +1,5 @@
 import OpenGL.GL
+from interfaces import *
 from PyQt5.QtCore import QSize, QEvent, QObject, Qt
 from PyQt5.QtGui import QFont, QPalette, QKeyEvent, QMouseEvent, QWheelEvent
 from PyQt5.QtWidgets import (QVBoxLayout, QListWidgetItem, QLineEdit,
@@ -33,7 +34,7 @@ class Window(QMainWindow):
         self.editor.closeEvent(a0)
 
 
-class SceneActions(QWidget):
+class SceneActions(QWidget, SceneActionsInterface):
     def __init__(self, editor):
         super(SceneActions, self).__init__()
 
@@ -101,7 +102,7 @@ class SceneActions(QWidget):
         self.__editor().get_gl_widget().create_plane()
 
 
-class EditorGUI(QWidget):
+class EditorGUI(QWidget, UpdateReceiverInterface):
     def __init__(self):
         super(EditorGUI, self).__init__()
 
@@ -109,7 +110,7 @@ class EditorGUI(QWidget):
         self.__main_splitter = QSplitter(Qt.Horizontal)
 
         self.__scene_exp = SceneExplorer(self)
-        self.__gl_widget = GlSceneWidget(self, self.__scene_exp)
+        self.__gl_widget = GlScene(self, self.__scene_exp)
         self.__scene_act = SceneActions(self)
 
         self.__action_splitter.addWidget(self.__scene_act)
@@ -127,22 +128,13 @@ class EditorGUI(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-    def get_scene_explorer(self):
-        return self.__scene_exp
-
-    def get_scene(self):
-        return self.__gl_widget.get_scene()
-
-    def get_gl_widget(self):
-        return self.__gl_widget
-
     def closeEvent(self, a0):
         self.__gl_widget.unload()
 
 
-class GlSceneWidget(QGLWidget):
+class GlScene(QGLWidget, GlSceneInterface):
     def __init__(self, editor, scene_explorer):
-        super(GlSceneWidget, self).__init__(editor)
+        super(GlScene, self).__init__(editor)
         self.__program = None
         self.__scene = Scene()
         self.__camera_controller = None
@@ -166,7 +158,7 @@ class GlSceneWidget(QGLWidget):
         GL.glClearColor(170 / 256, 170 / 256, 170 / 256, 1)
         GL.glEnable(GL.GL_BLEND)
         GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA)
-        GL.glPointSize(4)
+        GL.glPointSize(6)
         GL.glLineWidth(1)
         GL.glEnable(GL.GL_LINE_SMOOTH)
 
@@ -245,7 +237,7 @@ class GlSceneWidget(QGLWidget):
 
         self.update()
 
-    def try_select_scene_object(self, event):
+    def try_select_scene_object(self, event: QMouseEvent) -> bool:
         x, y = event.x(), event.y()
         to_select = self.__scene.try_select_object(x, y)
 
@@ -259,17 +251,20 @@ class GlSceneWidget(QGLWidget):
             se.set_scene_object_selected(to_select, True)
 
         self.update()
+        return bool(to_select)
 
 
-class SceneExplorer(QWidget):
-    def __init__(self, editor):
-        super(SceneExplorer, self).__init__(editor)
+class SceneExplorer(QWidget, SceneExplorerInterface):
+    def __init__(self, update_receiver: UpdateReceiverInterface):
+        super(SceneExplorer, self).__init__()
+
+        self.__update_receiver = ref(update_receiver)
 
         layout = QVBoxLayout()
-        self.__list = SceneObjectList(self)
+        self.__list = SceneObjectList()
 
         self.__list.itemClicked.connect(self.update_property)
-        self.__props = SceneObjectProperties(self)
+        self.__props = SceneObjectProperties()
 
         layout.addWidget(self.__props)
         layout.addWidget(self.__list)
@@ -280,21 +275,24 @@ class SceneExplorer(QWidget):
         size_pol.setVerticalStretch(1)
         size_pol.setControlType(QSizePolicy.Frame)
         self.setSizePolicy(size_pol)
-        self.setMinimumSize(200, 200)
+        self.setMinimumSize(300, 200)
         self.setMaximumWidth(500)
 
-    def add_scene_object_widget(self, so_widget):
-        self.__list.add_scene_object_widget(so_widget)
+    def add_scene_object(self, scene_object: SceneObject):
+        self.__list.add_scene_object(scene_object)
 
     def clear_selection(self):
         self.__list.deselect_all()
 
-    def select_scene_object(self, scene_object, deselct_others=False):
-        if deselct_others:
+    def select_scene_object(self, scene_object, deselect_others=False):
+        if deselect_others:
             self.__list.deselect_all()
         self.set_scene_object_selected(scene_object, True)
 
-    def set_scene_object_selected(self, scene_object, value):
+    def deselect_scene_object(self, scene_object: SceneObject):
+        self.set_scene_object_selected(scene_object, False)
+
+    def set_scene_object_selected(self, scene_object: SceneObject, value: bool):
         self.__list.set_scene_object_selected(scene_object, value)
         selected = self.__list.get_selected_items()
         if len(selected) == 1:
@@ -305,31 +303,55 @@ class SceneExplorer(QWidget):
     def update_property(self, item):
         widget = self.__list.itemWidget(item)
         self.__props.set_object(widget.get_object())
-        EditorShared.get_editor().update()
+        self.__update_receiver().update()
         
 
-class SceneObjectProperties(QWidget):
-    def __init__(self, *args):
-        super(SceneObjectProperties, self).__init__(*args)
+class SceneObjectProperties(QWidget, SceneObjectPropertiesInterface):
+    def __init__(self):
+        super(SceneObjectProperties, self).__init__()
         layout = QVBoxLayout()
         self.setLayout(layout)
 
         self.__so = None
-        self.__object_name_edit = QLineEdit(self)
+        self.__object_name_edit = QLineEdit()
         layout.addWidget(self.__object_name_edit)
 
-        self.__xyz = QWidget(self)
+        self.__xyz = QWidget()
         xyz_layout = QHBoxLayout()
-        self.x_edit = QLineEdit(self)
-        self.y_edit = QLineEdit(self)
-        self.z_edit = QLineEdit(self)
+        xyz_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.x_edit = QLineEdit()
+        self.y_edit = QLineEdit()
+        self.z_edit = QLineEdit()
         self.x_edit.editingFinished.connect(self.update_object)
         self.y_edit.editingFinished.connect(self.update_object)
         self.z_edit.editingFinished.connect(self.update_object)
 
-        xyz_layout.addWidget(self.x_edit)
-        xyz_layout.addWidget(self.y_edit)
-        xyz_layout.addWidget(self.z_edit)
+        x_name_edit_pair = QWidget()
+        x_layout = QHBoxLayout()
+        x_layout.setContentsMargins(0, 0, 0, 0)
+        x_layout.addWidget(QLabel("x:"))
+        x_layout.addWidget(self.x_edit)
+        x_name_edit_pair.setLayout(x_layout)
+
+        y_name_edit_pair = QWidget()
+        y_layout = QHBoxLayout()
+        y_layout.setContentsMargins(0, 0, 0, 0)
+        y_layout.addWidget(QLabel("y:"))
+        y_layout.addWidget(self.y_edit)
+        y_name_edit_pair.setLayout(y_layout)
+
+        z_name_edit_pair = QWidget()
+        z_layout = QHBoxLayout()
+        z_layout.setContentsMargins(0, 0, 0, 0)
+        z_layout.addWidget(QLabel("z:"))
+        z_layout.addWidget(self.z_edit)
+        z_name_edit_pair.setLayout(z_layout)
+
+        xyz_layout.addWidget(x_name_edit_pair)
+        xyz_layout.addWidget(y_name_edit_pair)
+        xyz_layout.addWidget(z_name_edit_pair)
+
         self.__xyz.setLayout(xyz_layout)
         layout.addWidget(self.__xyz)
 
@@ -342,12 +364,12 @@ class SceneObjectProperties(QWidget):
         self.z_edit.setText("")
         self.__xyz.setDisabled(True)
 
-    def set_object(self, scene_object):
+    def set_scene_object(self, scene_object: SceneObject):
         self.__so = scene_object
         self.__xyz.setEnabled(True)
-        self.update_props()
+        self.update_properties()
 
-    def update_props(self):
+    def update_properties(self):
         pos = self.__so.translation
         self.x_edit.setText(f'{pos.x:.4f}')
         self.y_edit.setText(f'{pos.y:.4f}')
@@ -368,10 +390,10 @@ class PositionProperty(QWidget):
         super(PositionProperty, self).__init__(*args)
 
 
-class SceneObjectList(QListWidget):
-    def __init__(self, *args):
+class SceneObjectList(QListWidget, SceneObjectListInterface):
+    def __init__(self, ):
         self.__object_to_item = dict()
-        super(SceneObjectList, self).__init__(*args)
+        super(SceneObjectList, self).__init__()
 
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.itemSelectionChanged.connect(self.selection_changed_callback)
@@ -410,8 +432,10 @@ class SceneObjectList(QListWidget):
                 widget.get_object().selected = item.isSelected()
         EditorShared.get_gl_widget().update()
 
-    def add_scene_object_widget(self, so_widget):
+    def add_scene_object(self, scene_object: SceneObject):
         item = QListWidgetItem()
+        so_widget = SceneObjectWidget(scene_object)
+
         item.setSizeHint(so_widget.sizeHint())
         self.addItem(item)
         self.setItemWidget(item, so_widget)
@@ -425,12 +449,18 @@ class SceneObjectList(QListWidget):
                 selected.append(item)
         return selected
 
-    def get_scene_object_item(self, scene_object):
+    def get_scene_object_item(self, scene_object: SceneObject):
         return self.__object_to_item[scene_object]
 
-    def set_scene_object_selected(self, scene_object, value):
+    def set_scene_object_selected(self, scene_object: SceneObject, value: bool):
         item = self.get_scene_object_item(scene_object)
         item.setSelected(value)
         widget = self.itemWidget(item)
         widget.get_object().selected = value
+
+    def select_scene_object(self, scene_object: SceneObject,
+                            deselect_others: bool = False):
+        if deselect_others:
+            self.deselect_all()
+        self.set_scene_object_selected(scene_object, True)
 
