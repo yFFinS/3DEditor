@@ -34,14 +34,6 @@ class BaseGeometryObject:
     def get_serializing_dict(self):
         pass
 
-    def __add__(self, other):
-        summary = self.xyz + other.xyz
-        return Point(summary.x, summary.y, summary.z)
-
-    def __sub__(self, other):
-        differ = self.xyz - other.xyz
-        return Point(differ.x, differ.y, differ.z)
-
 
 class Point(BaseGeometryObject):
     __counter = 1
@@ -50,8 +42,8 @@ class Point(BaseGeometryObject):
         if name is None:
             name = f'Point{Point.__counter}'
             Point.__counter += 1
-        super(Point, self).__init__(name, id)
         self.__type = "point"
+        super(Point, self).__init__(self.__type, name, id)
         self.pos = pos
 
     @property
@@ -92,8 +84,8 @@ class BaseLine(BaseGeometryObject):
         if name is None:
             name = f'Line{BaseLine.__counter}'
             BaseLine.__counter += 1
-        super(BaseLine, self).__init__(name, id)
         self.__type = "line"
+        super(BaseLine, self).__init__(self.__type, name, id)
 
     def get_pivot_points(self):
         """Возвращает две различные точки, принадлежащие прямой"""
@@ -147,10 +139,10 @@ class LineBy2Points(BaseLine):
         pass
 
     def get_pivot_points(self):
-        return self.point1.xyz, self.point2.xyz
+        return self.point1.pos, self.point2.pos
 
     def get_directional_vector(self):
-        return self.point2.xyz - self.point1.xyz
+        return self.point2.pos - self.point1.pos
 
 
 class LineByPointAndLine(BaseLine):

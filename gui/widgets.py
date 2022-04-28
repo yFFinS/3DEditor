@@ -1,9 +1,11 @@
+from typing import Iterable
 from weakref import ref
 
 from PyQt5.QtCore import QSize, QEvent, Qt
 from PyQt5.QtGui import QKeyEvent, QFont
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QPushButton, QListWidget, QAbstractItemView, \
-    QListWidgetItem, QLabel
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QPushButton, \
+    QListWidget, QAbstractItemView, \
+    QListWidgetItem, QLabel, QShortcut
 
 from gui.interfaces import SceneActionsInterface, GLSceneInterface
 from scene.interfaces import SceneEventListener
@@ -28,7 +30,7 @@ class SceneActions(QWidget, SceneActionsInterface):
         self.__gl_scene = ref(gl_scene)
         self.__buttons = []
 
-        def create_button(text, action):
+        def create_button(text, action, shortcut):
             btn = QPushButton(text, self)
             btn.setStyleSheet("""
             QPushButton[selected="true"] {
@@ -36,15 +38,17 @@ class SceneActions(QWidget, SceneActionsInterface):
                 }""")
             btn.setFixedSize(QSize(60, 20))
             btn.pressed.connect(action)
+            btn.setShortcut(shortcut)
+            btn.setToolTip(shortcut)
             if not self.__buttons:
                 self.__set_button_selected(btn)
             self.__buttons.append(btn)
             layout.addWidget(btn)
 
-        create_button("Move", self.action_move)
-        create_button("Point", self.action_point)
-        create_button("Line", self.action_line)
-        create_button("Plane", self.action_plane)
+        create_button("Move", self.action_move, "M")
+        create_button("Point", self.action_point, "P")
+        create_button("Line", self.action_line, "L")
+        create_button("Plane", self.action_plane, "Shift+P")
 
         self.setFixedHeight(layout.sizeHint().height())
         layout.addStretch()
@@ -64,6 +68,7 @@ class SceneActions(QWidget, SceneActionsInterface):
             btn.update()
 
     def action_move(self):
+        print('move')
         self.__set_button_selected(self.sender())
         self.__gl_scene().move_object()
 
@@ -91,7 +96,6 @@ class SceneObjectList(QListWidget, SceneEventListener):
 
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.itemSelectionChanged.connect(self.__selection_changed)
-        self.installEventFilter(self)
 
     def __subscribe_to_scene(self, scene: Scene):
         scene.on_object_added += self.on_object_added
@@ -113,7 +117,7 @@ class SceneObjectList(QListWidget, SceneEventListener):
         self.setItemWidget(item, so_widget)
         self.__object_to_item[scene_object] = item
 
-    def on_objects_selected(self, scene_objects: list[SceneObject]):
+    def on_objects_selected(self, scene_objects: Iterable[SceneObject]):
         self.__accepting_events = False
         for obj in scene_objects:
             item = self.__object_to_item[obj]
@@ -121,22 +125,13 @@ class SceneObjectList(QListWidget, SceneEventListener):
 
         self.__accepting_events = True
 
-    def on_objects_deselected(self, scene_objects: list[SceneObject]):
+    def on_objects_deselected(self, scene_objects: Iterable[SceneObject]):
         self.__accepting_events = False
         for obj in scene_objects:
             item = self.__object_to_item[obj]
             item.setSelected(False)
 
         self.__accepting_events = True
-
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.KeyPress:
-            kp = QKeyEvent(event)
-            if kp.key() == Qt.Key_Delete:
-                self.__delete_selected()
-                return True
-
-        return super(QListWidget, self).eventFilter(obj, event)
 
     def __delete_selected(self):
         scene = self.__gl_scene().get_scene()

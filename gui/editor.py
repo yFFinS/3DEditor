@@ -5,21 +5,20 @@ import glm
 from OpenGL import GL
 from PyQt5.QtCore import Qt, QObject
 from PyQt5.QtOpenGL import QGLWidget
-from PyQt5.QtWidgets import QMainWindow, QWidget, QSplitter, QHBoxLayout, QSizePolicy, QVBoxLayout, QLineEdit, QLabel
+from PyQt5.QtWidgets import QMainWindow, QWidget, QSplitter, QHBoxLayout, \
+    QSizePolicy, QVBoxLayout, QLineEdit, QLabel, QShortcut
 
 from core.event_dispatcher import *
-from core.interfaces import UpdateReceiverInterface
 from gui.interfaces import GLSceneInterface, SceneExplorerInterface
 from gui.widgets import SceneActions, SceneObjectList
 from interaction.camera_controller import CameraController
-from interaction.geometry_builders import PointBuilder, LineBuilder, PlaneBuilder
+from interaction.geometry_builders import PointBuilder, LineBuilder, \
+    PlaneBuilder
 from render.shaders import ShaderProgram
 from scene.camera import Camera
 from scene.render_geometry import SceneGrid, SceneCoordAxis
 from scene.scene import Scene
 from scene.scene_object import SceneObject
-
-from shared import EditorShared
 
 
 class Window(QMainWindow):
@@ -33,7 +32,7 @@ class Window(QMainWindow):
 
         self.setCentralWidget(self.__editor)
         self.setWindowTitle('3D Editor')
-
+     
     def closeEvent(self, a0):
         self.__editor.closeEvent(a0)
 
@@ -55,8 +54,10 @@ class EditorGUI(QWidget):
         self.__main_splitter.addWidget(self.__gl_widget)
         self.__main_splitter.setSizes([self.__scene_exp.width(), 200])
 
-        self.__action_splitter.setStyleSheet("QSplitter::handle { background-color: gray }")
-        self.__main_splitter.setStyleSheet("QSplitter::handle { background-color: gray }")
+        self.__action_splitter.setStyleSheet(
+            "QSplitter::handle { background-color: gray }")
+        self.__main_splitter.setStyleSheet(
+            "QSplitter::handle { background-color: gray }")
 
         layout = QHBoxLayout()
         layout.addWidget(self.__action_splitter)
@@ -67,7 +68,7 @@ class EditorGUI(QWidget):
         self.__gl_widget.unload()
 
 
-class GLScene(QGLWidget, GLSceneInterface):
+class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
     def __init__(self):
         super(QGLWidget, self).__init__()
         self.__program = None
@@ -75,14 +76,23 @@ class GLScene(QGLWidget, GLSceneInterface):
         self.__camera_controller = None
         self.__last_action = None
         self.__geometry_builder = None
+        self.__initialized = False
 
         size_pol = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         size_pol.setVerticalStretch(1)
         size_pol.setHorizontalStretch(1)
         size_pol.setControlType(QSizePolicy.Frame)
         self.setSizePolicy(size_pol)
-
         self.installEventFilter(self)
+
+        self.__delete_sc = QShortcut("Del", self)
+        self.__delete_sc.activated.connect(self.__delete_selected_objects)
+        self.__cancel_builder_sc = QShortcut("Esc", self)
+        self.__cancel_builder_sc.activated.connect(self.__cancel_builder)
+
+    def __cancel_builder(self):
+        if self.__geometry_builder is not None:
+            self.__geometry_builder.cancel()
 
     def __subscribe_to_scene(self):
         self.__scene.on_object_added += self.__update_internal
@@ -107,8 +117,8 @@ class GLScene(QGLWidget, GLSceneInterface):
         GL.glLineWidth(1)
         GL.glEnable(GL.GL_LINE_SMOOTH)
 
-        self.__program = ShaderProgram("shaders/default.vert", "shaders/default.frag")
-        print(self.parent())
+        self.__program = ShaderProgram("shaders/default.vert",
+                                       "shaders/default.frag")
         self.__scene.camera = Camera(self.width(), self.height())
         self.__camera_controller = CameraController(self.__scene.camera)
 
@@ -117,8 +127,15 @@ class GLScene(QGLWidget, GLSceneInterface):
         self.__scene.add_object(SceneGrid())
         self.__scene.add_object(SceneCoordAxis())
 
+        self.__initialized = True
         self.update()
 
+    def eventFilter(self, a0: 'QObject', a1: 'QEvent') -> bool:
+        redraw = dispatch(self, a1)
+        if redraw:
+            self.redraw()
+        return super(GLScene, self).eventFilter(a0, a1)
+    
     def resizeGL(self, w, h):
         if w <= 0 or h <= 0:
             return
@@ -130,21 +147,26 @@ class GLScene(QGLWidget, GLSceneInterface):
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
         self.__scene.render()
 
-    def eventFilter(self, obj: QObject, event: QEvent):
+    def on_mouse_pressed(self, event: QMouseEvent):
+        if self.__geometry_builder is not None:
+            return False
+        if event.button() == Qt.LeftButton:
+            self.try_select_scene_object(event)
+            return True
+        return False
+
+    def __delete_selected_objects(self):
+        for obj in filter(lambda o: o.selected, list(self.__scene.objects)):
+            self.__scene.remove_object(obj)
+
+    def on_any_event(self, event: QEvent):
+        if not self.__initialized:
+            return False
         update = dispatch(self.__camera_controller, event)
         if self.__geometry_builder is not None:
             update |= dispatch(self.__geometry_builder, event)
-
         if update:
             self.update()
-
-        if self.__geometry_builder is not None or event.type() != QEvent.MouseButtonPress:
-            return super(QGLWidget, self).eventFilter(obj, event)
-
-        event = QMouseEvent(event)
-        if event.button() == Qt.LeftButton:
-            self.try_select_scene_object(event)
-        return super(QGLWidget, self).eventFilter(obj, event)
 
     def unload(self):
         self.__scene.unload()
@@ -258,7 +280,7 @@ class SceneObjectProperties(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        self.__selected_counter = 0
+        self.__selected_objects = []
         self.__scene_object = None
         self.__object_name_edit = QLineEdit()
         layout.addWidget(self.__object_name_edit)
@@ -311,13 +333,19 @@ class SceneObjectProperties(QWidget):
         scene.on_objects_deselected += self.__on_objects_deselected
 
     def __on_objects_selected(self, scene_objects):
-        if self.__selected_counter == 1:
-            self.__set_object(scene_objects[0])
+        self.__selected_objects.extend(scene_objects)
+        if len(self.__selected_objects) == 1:
+            self.__set_object(self.__selected_objects[0])
         else:
             self.clear_and_disable_edit()
 
     def __on_objects_deselected(self, scene_objects):
-        if self.__scene_object is not None and self.__scene_object in scene_objects:
+        self.__selected_objects = \
+            [selected for selected in self.__selected_objects
+             if selected not in scene_objects]
+        if len(self.__selected_objects) == 1:
+            self.__set_object(self.__selected_objects[0])
+        else:
             self.clear_and_disable_edit()
 
     def clear_and_disable_edit(self):
@@ -333,6 +361,11 @@ class SceneObjectProperties(QWidget):
         self.update_properties()
 
     def update_properties(self):
+        if self.__scene_object is None:
+            return
+        prim = self.__scene_object.primitive
+        if prim is not None:
+            self.__object_name_edit.setText(prim.name)
         pos = self.__scene_object.transform.translation
         self.x_edit.setText(f'{pos.x:.4f}')
         self.y_edit.setText(f'{pos.y:.4f}')
@@ -340,9 +373,13 @@ class SceneObjectProperties(QWidget):
 
     def update_object(self):
         try:
+            name = self.__object_name_edit.text()
             pos = glm.vec3(float(self.x_edit.text()),
                            float(self.y_edit.text()),
                            float(self.z_edit.text()))
+            prim = self.__scene_object.primitive
+            if prim is not None:
+                self.__scene_object.primitive.name = name
             self.__scene_object.set_position(pos)
             self.__gl_scene().redraw()
         except ValueError:

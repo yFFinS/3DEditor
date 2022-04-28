@@ -6,6 +6,7 @@ from core.interfaces import EventHandlerInterface
 
 def dispatch(handler: EventHandlerInterface, event: QEvent) -> bool:
     res = None
+    handler.on_any_event(event)
     match event.type():
         case QEvent.Wheel:
             event = QWheelEvent(event)
@@ -25,4 +26,4 @@ def dispatch(handler: EventHandlerInterface, event: QEvent) -> bool:
         case QEvent.KeyRelease:
             event = QKeyEvent(event)
             res = handler.on_key_released(event)
-    return res is not None
+    return bool(res)

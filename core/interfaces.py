@@ -1,5 +1,6 @@
 from abc import ABC
 
+from PyQt5.QtCore import QEvent
 from PyQt5.QtGui import QMouseEvent, QWheelEvent, QKeyEvent
 
 
@@ -8,7 +9,10 @@ class UpdateReceiverInterface:
         raise NotImplementedError
 
 
-class EventHandlerInterface(ABC):
+class EventHandlerInterface:
+    def on_any_event(self, event: QEvent):
+        pass
+
     def on_mouse_move(self, event: QMouseEvent):
         pass
 
