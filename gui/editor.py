@@ -119,16 +119,16 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
 
         self.__program = ShaderProgram("shaders/default.vert",
                                        "shaders/default.frag")
-        self.__scene.camera = Camera(self.width(), self.height())
-        self.__camera_controller = CameraController(self.__scene.camera)
 
         SceneObject.SHADER_PROGRAM = self.__program
+
+        self.__scene.camera = Camera(self.width(), self.height())
+        self.__camera_controller = CameraController(self.__scene.camera)
 
         self.__scene.add_object(SceneGrid())
         self.__scene.add_object(SceneCoordAxis())
 
         self.__initialized = True
-        self.update()
 
     def eventFilter(self, a0: 'QObject', a1: 'QEvent') -> bool:
         redraw = dispatch(self, a1)
@@ -158,6 +158,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
     def __delete_selected_objects(self):
         for obj in filter(lambda o: o.selected, list(self.__scene.objects)):
             self.__scene.remove_object(obj)
+        self.redraw()
 
     def on_any_event(self, event: QEvent):
         if not self.__initialized:
@@ -350,14 +351,17 @@ class SceneObjectProperties(QWidget):
 
     def clear_and_disable_edit(self):
         self.__scene_object = None
-        self.x_edit.setText("")
-        self.y_edit.setText("")
-        self.z_edit.setText("")
+        self.__object_name_edit.clear()
+        self.__object_name_edit.setDisabled(True)
+        self.x_edit.clear()
+        self.y_edit.clear()
+        self.z_edit.clear()
         self.__xyz.setDisabled(True)
 
     def __set_object(self, scene_object: SceneObject):
         self.__scene_object = scene_object
         self.__xyz.setEnabled(True)
+        self.__object_name_edit.setEnabled(True)
         self.update_properties()
 
     def update_properties(self):

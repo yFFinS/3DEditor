@@ -1,14 +1,13 @@
 from typing import Iterable
 from weakref import ref
 
-from PyQt5.QtCore import QSize, QEvent, Qt
+from PyQt5.QtCore import QSize, QEvent, Qt, QItemSelection
 from PyQt5.QtGui import QKeyEvent, QFont
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QPushButton, \
     QListWidget, QAbstractItemView, \
     QListWidgetItem, QLabel, QShortcut
 
 from gui.interfaces import SceneActionsInterface, GLSceneInterface
-from scene.interfaces import SceneEventListener
 from scene.render_geometry import ScenePoint, SceneLine, ScenePlane
 from scene.scene import Scene
 from scene.scene_object import SceneObject
@@ -30,7 +29,7 @@ class SceneActions(QWidget, SceneActionsInterface):
         self.__gl_scene = ref(gl_scene)
         self.__buttons = []
 
-        def create_button(text, action, shortcut):
+        def create_button(text, action, shortcut=None):
             btn = QPushButton(text, self)
             btn.setStyleSheet("""
             QPushButton[selected="true"] {
@@ -38,8 +37,9 @@ class SceneActions(QWidget, SceneActionsInterface):
                 }""")
             btn.setFixedSize(QSize(60, 20))
             btn.pressed.connect(action)
-            btn.setShortcut(shortcut)
-            btn.setToolTip(shortcut)
+            if shortcut is not None:
+                btn.setShortcut(shortcut)
+                btn.setToolTip(shortcut)
             if not self.__buttons:
                 self.__set_button_selected(btn)
             self.__buttons.append(btn)
@@ -49,9 +49,18 @@ class SceneActions(QWidget, SceneActionsInterface):
         create_button("Point", self.action_point, "P")
         create_button("Line", self.action_line, "L")
         create_button("Plane", self.action_plane, "Shift+P")
+        create_button("Stress Test", self.action_stress_test)
 
         self.setFixedHeight(layout.sizeHint().height())
         layout.addStretch()
+
+    def action_stress_test(self):
+        self.__set_button_selected(self.sender())
+        scene = self.__gl_scene().get_scene()
+        from core.Base_geometry_objects import Point
+        import glm
+        for i in range(1000):
+            scene.add_object(ScenePoint(Point(glm.vec3(glm.sin(i), glm.cos(i), glm.cos(-i)))))
 
     def __set_button_selected(self, btn):
         self.__deselect_all_buttons()
@@ -68,7 +77,6 @@ class SceneActions(QWidget, SceneActionsInterface):
             btn.update()
 
     def action_move(self):
-        print('move')
         self.__set_button_selected(self.sender())
         self.__gl_scene().move_object()
 
@@ -85,7 +93,7 @@ class SceneActions(QWidget, SceneActionsInterface):
         self.__gl_scene().create_plane()
 
 
-class SceneObjectList(QListWidget, SceneEventListener):
+class SceneObjectList(QListWidget):
     def __init__(self, gl_scene: GLSceneInterface):
         super(QListWidget, self).__init__()
 
@@ -104,11 +112,16 @@ class SceneObjectList(QListWidget, SceneEventListener):
         scene.on_objects_deselected += self.on_objects_deselected
 
     def on_object_removed(self, scene_object: SceneObject):
+        self.__accepting_events = False
+
         item = self.__object_to_item.pop(scene_object)
         self.removeItemWidget(item)
         self.takeItem(self.row(item))
 
+        self.__accepting_events = True
+
     def on_object_added(self, scene_object: SceneObject):
+        self.__accepting_events = False
         item = QListWidgetItem()
         so_widget = SceneObjectWidget(scene_object)
 
@@ -116,6 +129,7 @@ class SceneObjectList(QListWidget, SceneEventListener):
         self.addItem(item)
         self.setItemWidget(item, so_widget)
         self.__object_to_item[scene_object] = item
+        self.__accepting_events = True
 
     def on_objects_selected(self, scene_objects: Iterable[SceneObject]):
         self.__accepting_events = False
@@ -133,20 +147,9 @@ class SceneObjectList(QListWidget, SceneEventListener):
 
         self.__accepting_events = True
 
-    def __delete_selected(self):
-        scene = self.__gl_scene().get_scene()
-        for item in self.selectedItems():
-            obj = self.itemWidget(item).get_object()
-            scene.remove_object(obj)
-
-    def __deselect_all(self):
-        scene = self.__gl_scene().get_scene()
-        scene.deselect(list(self.__object_to_item.keys()))
-
     def __selection_changed(self):
         if not self.__accepting_events:
             return
-
         for i in range(self.count()):
             item = self.item(i)
             widget = self.itemWidget(item)
@@ -156,26 +159,12 @@ class SceneObjectList(QListWidget, SceneEventListener):
 
         self.__gl_scene().update()
 
-    def get_selected_items(self):
-        selected = []
-        for i in range(self.count()):
-            item = self.item(i)
-            if item.isSelected():
-                selected.append(item)
-        return selected
-
     def __set_object_selected(self, scene_object: SceneObject, value: bool):
         scene = self.__gl_scene().get_scene()
         if value:
             scene.select(scene_object)
         else:
             scene.deselect(scene_object)
-
-    def select_scene_object(self, scene_object: SceneObject,
-                            deselect_others: bool = False):
-        if deselect_others:
-            self.__deselect_all()
-        self.__set_object_selected(scene_object, True)
 
 
 class SceneObjectWidget(QWidget):
