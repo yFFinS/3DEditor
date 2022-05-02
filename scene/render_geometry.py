@@ -147,7 +147,7 @@ class ScenePlane(SceneObject):
         p1, p2, p3 = self.plane.get_pivot_points()
         center = (p1 + p2 + p3) / 2
         self.transform.translation = center
-        self.mesh.set_positions(np.array([p1 - center, p2 - center, p3 - center]) * 10)
+        self.mesh.set_positions(np.array([p1 - center, p2 - center, p3 - center]))
 
     def update_hierarchy_position(self, pos: glm.vec3, ignored: set['SceneObject']):
         move = pos - self.transform.translation
