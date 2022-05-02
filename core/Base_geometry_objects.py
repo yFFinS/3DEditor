@@ -146,7 +146,7 @@ class LineBy2Points(BaseLine):
 
 
 class LineByPointAndLine(BaseLine):
-    def __init__(self, name, point, line):
+    def __init__(self, point, line, name=None):
         super(LineByPointAndLine, self).__init__(name)
         self.point = point
         self.line = line
@@ -270,7 +270,13 @@ class PlaneByPointAndPlane(BasePlane):
 
 
 class Segment(BaseGeometryObject):
-    def __init__(self, point1, point2, name=None, id=None):
+    __counter = 1
+
+    def __init__(self, point1: Point, point2: Point, name=None, id=None):
+        if name is None:
+            name = f"Edge{Segment.__counter}"
+            Segment.__counter += 1
+
         super(Segment, self).__init__('segment', name, id)
         self.point1 = point1
         self.point2 = point2
@@ -312,6 +318,29 @@ class Segment(BaseGeometryObject):
         intersect1 = segment.get_intersection_with_line(self.get_line())
         intersect2 = self.get_intersection_with_line(segment.get_line())
         return intersect1
+
+
+class Triangle(BaseGeometryObject):
+    __counter = 1
+
+    def __init__(self, point1, point2, point3, name=None, id=None):
+        if name is None:
+            name = f"Triangle{Triangle.__counter}"
+            Triangle.__counter += 1
+
+        super(Triangle, self).__init__('triangle', name, id)
+        self.point1 = point1
+        self.point2 = point2
+        self.point3 = point3
+
+    def get_serializing_dict(self):
+        return {self.id:
+            {
+                "type": self.type,
+                "name": self.name,
+                "forming objects": [self.point1.id, self.point2.id, self.point3.id]
+            }
+        }
 
 
 class BaseVolumetricBody(BaseGeometryObject):

@@ -2,7 +2,7 @@ import numpy as np
 import numpy.typing as npt
 from OpenGL import GL as GL
 
-from helpers import as_uint32_array
+from core.helpers import as_uint32_array
 from render.unmanaged import UnmanagedResource
 
 

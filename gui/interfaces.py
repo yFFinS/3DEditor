@@ -23,7 +23,6 @@ class SceneActionsInterface:
 
 
 class GLSceneInterface:
-    @abc.abstractmethod
     def get_scene(self) -> Scene:
         raise NotImplementedError
 
@@ -46,6 +45,12 @@ class GLSceneInterface:
         raise NotImplementedError
 
     def create_plane(self):
+        raise NotImplementedError
+
+    def create_edge(self):
+        raise NotImplementedError
+
+    def create_face(self):
         raise NotImplementedError
 
     def try_select_scene_object(self, event: QMouseEvent) -> bool:

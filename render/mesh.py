@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from OpenGL import GL as GL
 
-from helpers import empty_uint32_array, empty_float32_array
+from core.helpers import empty_uint32_array, empty_float32_array
 from render.buffers import VertexBuffer, IndexBuffer
 from render.vertex_array import VertexArray
 

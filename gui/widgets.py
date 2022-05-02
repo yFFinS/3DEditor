@@ -1,11 +1,11 @@
 from typing import Iterable
 from weakref import ref
 
-from PyQt5.QtCore import QSize, QEvent, Qt, QItemSelection
-from PyQt5.QtGui import QKeyEvent, QFont
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QPushButton, \
-    QListWidget, QAbstractItemView, \
-    QListWidgetItem, QLabel, QShortcut
+from PyQt5.QtCore import QSize
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QSizePolicy, QPushButton,
+                             QListWidget, QAbstractItemView,
+                             QListWidgetItem, QLabel)
 
 from gui.interfaces import SceneActionsInterface, GLSceneInterface
 from scene.render_geometry import ScenePoint, SceneLine, ScenePlane
@@ -47,20 +47,31 @@ class SceneActions(QWidget, SceneActionsInterface):
 
         create_button("Move", self.action_move, "M")
         create_button("Point", self.action_point, "P")
+        create_button("Edge", self.action_edge, "E")
+        create_button("Face", self.action_face, "F")
+        layout.addStretch()
         create_button("Line", self.action_line, "L")
         create_button("Plane", self.action_plane, "Shift+P")
-        create_button("Stress Test", self.action_stress_test)
+        layout.addStretch()
+        create_button("Stress", self.action_stress_test)
 
         self.setFixedHeight(layout.sizeHint().height())
-        layout.addStretch()
 
     def action_stress_test(self):
-        self.__set_button_selected(self.sender())
         scene = self.__gl_scene().get_scene()
+
         from core.Base_geometry_objects import Point
         import glm
+        import random
+
+        offset = glm.vec3(random.random(), random.random(), random.random())
+        start = random.random() * 100
         for i in range(1000):
-            scene.add_object(ScenePoint(Point(glm.vec3(glm.sin(i), glm.cos(i), glm.cos(-i)))))
+            angle = i + start
+            pos = glm.vec3(glm.sin(angle), glm.cos(angle), glm.cos(angle) * glm.sin(angle))
+            scene.add_object(ScenePoint(Point(pos + offset)))
+
+        self.__gl_scene().redraw()
 
     def __set_button_selected(self, btn):
         self.__deselect_all_buttons()
@@ -87,6 +98,14 @@ class SceneActions(QWidget, SceneActionsInterface):
     def action_line(self):
         self.__set_button_selected(self.sender())
         self.__gl_scene().create_line()
+
+    def action_edge(self):
+        self.__set_button_selected(self.sender())
+        self.__gl_scene().create_edge()
+
+    def action_face(self):
+        self.__set_button_selected(self.sender())
+        self.__gl_scene().create_face()
 
     def action_plane(self):
         self.__set_button_selected(self.sender())
@@ -121,6 +140,8 @@ class SceneObjectList(QListWidget):
         self.__accepting_events = True
 
     def on_object_added(self, scene_object: SceneObject):
+        # Медленно
+
         self.__accepting_events = False
         item = QListWidgetItem()
         so_widget = SceneObjectWidget(scene_object)
@@ -157,7 +178,7 @@ class SceneObjectList(QListWidget):
                 obj = widget.get_object()
                 self.__set_object_selected(obj, item.isSelected())
 
-        self.__gl_scene().update()
+        self.__gl_scene().redraw()
 
     def __set_object_selected(self, scene_object: SceneObject, value: bool):
         scene = self.__gl_scene().get_scene()
@@ -168,40 +189,29 @@ class SceneObjectList(QListWidget):
 
 
 class SceneObjectWidget(QWidget):
-    __point_counter = 1
-    __line_counter = 1
-    __plane_counter = 1
-
     def __init__(self, scene_object: SceneObject):
         super(SceneObjectWidget, self).__init__()
 
+        scene_object.on_updated += self.__object_updated
         self.__scene_object = scene_object
 
         self.__layout = QHBoxLayout()
 
         font = QFont("Arial", 10)
         self.__name_label = QLabel()
+
         self.__name_label.setFont(font)
+        self.__name_label.setText(scene_object.name)
 
-        if isinstance(scene_object, ScenePoint):
-            text = f'Point{SceneObjectWidget.__point_counter}'
-            SceneObjectWidget.__point_counter += 1
-        elif isinstance(scene_object, SceneLine):
-            text = f'Line{SceneObjectWidget.__line_counter}'
-            SceneObjectWidget.__line_counter += 1
-        elif isinstance(scene_object, ScenePlane):
-            text = f'Plane{SceneObjectWidget.__plane_counter}'
-            SceneObjectWidget.__plane_counter += 1
-        else:
-            text = 'Unknown'
-
-        self.__name_label.setText(text)
         self.__layout.addWidget(self.__name_label)
         self.__layout.setContentsMargins(5, 2, 5, 2)
         self.setFixedHeight(20)
 
         self.__layout.addStretch()
         self.setLayout(self.__layout)
+
+    def __object_updated(self, obj):
+        self.__name_label.setText(self.__scene_object.name)
 
     def get_object(self):
         return self.__scene_object

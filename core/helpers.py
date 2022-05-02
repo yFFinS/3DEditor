@@ -95,3 +95,7 @@ def intersect_line_frustum(l1, l2, frustum_edges):
 def extract_pos(event: QMouseEvent) -> glm.vec2:
     pos = event.pos()
     return glm.vec2(pos.x(), pos.y())
+
+
+def round_vec3(vec3: glm.vec3, digits: int = 4) -> glm.vec3:
+    return glm.vec3(round(vec3.x, digits), round(vec3.y, digits), round(vec3.z, digits))

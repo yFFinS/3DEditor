@@ -19,6 +19,9 @@ class EventHandlerInterface:
     def on_mouse_pressed(self, event: QMouseEvent):
         pass
 
+    def on_mouse_double_click(self, event: QMouseEvent):
+        pass
+
     def on_mouse_released(self, event: QMouseEvent):
         pass
 

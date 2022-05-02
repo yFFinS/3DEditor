@@ -1,6 +1,6 @@
 from OpenGL import GL as GL
 
-from helpers import as_uint32_array
+from core.helpers import as_uint32_array
 from render.buffers import IndexBuffer, VertexBuffer
 from render.unmanaged import UnmanagedResource
 

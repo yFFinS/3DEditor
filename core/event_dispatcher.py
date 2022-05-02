@@ -14,6 +14,9 @@ def dispatch(handler: EventHandlerInterface, event: QEvent) -> bool:
         case QEvent.MouseButtonPress:
             event = QMouseEvent(event)
             res = handler.on_mouse_pressed(event)
+        case QEvent.MouseButtonDblClick:
+            event = QMouseEvent(event)
+            res = handler.on_mouse_double_click(event)
         case QEvent.MouseButtonRelease:
             event = QMouseEvent(event)
             res = handler.on_mouse_released(event)

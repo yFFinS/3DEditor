@@ -8,12 +8,17 @@ out vec4 oColor;
 struct InstanceProps
 {
     mat4 MVP;
+    float Selected;
 };
 
 uniform InstanceProps Instance;
+vec3 SELECTED_COLOR = vec3(0.55, 0.55, 1);
 
 void main()
 {
     gl_Position = Instance.MVP * vec4(aPosition, 1.0f);
-    oColor = aColor;
+    if (Instance.Selected < 0)
+        oColor = aColor;
+    else
+        oColor = vec4(SELECTED_COLOR, aColor.w);
 }

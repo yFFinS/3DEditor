@@ -1,6 +1,5 @@
 import json
-from scenes import *
-from core.generator_of_decoding_objects import generate_object_by_deserialized_data
+from serialization.generator_of_decoding_objects import generate_object_by_deserialized_data
 
 
 def serialize(scene, file_name):
@@ -22,6 +21,7 @@ def deserialize(file_name):
         # TODO: Изменить чтоб Бим бим бам бам
         generate_object_by_deserialized_data(id, data[id], data, objects)
     return objects
+
 
 if __name__ == "__main__":
     pass
