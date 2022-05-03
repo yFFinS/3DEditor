@@ -20,7 +20,6 @@ def deserialize(file_name):
     data = json.load(file)
     objects = dict()
     for id in data.keys():
-        # TODO: Изменить чтоб Бим бим бам бам
         generate_object_by_deserialized_data(id, data[id], data, objects)
     return objects
 

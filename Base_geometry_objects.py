@@ -1,6 +1,6 @@
 import glm
 import uuid
-
+import numpy as np
 
 class BaseGeometryObject:
     def __init__(self, object_type, name=None, id=None):
@@ -10,6 +10,15 @@ class BaseGeometryObject:
             self.__id = id
         self.__type = object_type
         self.name = name
+
+    def get_dist_to_screen_pos(self, screen_pos, transform):
+        # TODO
+        """
+        :param glm.vec2 screen_pos: Координаты точки на экране
+        :param func transform: Функция, которая переводит точку glm.vec3 в соответствующую ей точку glm.vec2 нг экране
+        :return: Расстояние от screen_pos до объекта
+        """
+        raise NotImplementedError
 
     @property
     def id(self):
@@ -84,6 +93,10 @@ class Point(BaseGeometryObject):
     def get_dist_to_plane(self, plane):
         pass
 
+    def get_dist_to_screen_pos(self, screen_pos, transform):
+        transformed_point = transform(self.pos)
+        return glm.distance(screen_pos, transformed_point)
+
 
 class BaseLine(BaseGeometryObject):
     __counter = 0
@@ -108,7 +121,6 @@ class BaseLine(BaseGeometryObject):
         dir_vec2 = line.get_directional_vector()
         if len(glm.cross(dir_vec1, dir_vec2)) == 0:
             return None
-        # TODO: отлетаешь
         a1 = self.get_pivot_points()[0].xyz
         a2 = line.get_pivot_points()[0].xyz
         if abs((dir_vec1.x * dir_vec2.y - dir_vec2.x)) > 1e-9:
@@ -120,6 +132,15 @@ class BaseLine(BaseGeometryObject):
         else:
             coef = (a2.y - a1.y + a1.z * dir_vec1.y - a2.y * dir_vec1.y) / (dir_vec1.y * dir_vec2.z - dir_vec2.y)
             return a2 + coef * dir_vec2
+
+        def get_dist_to_screen_pos(self, screen_pos, transform):
+            p0, p1 = self.get_pivot_points()
+            transformed_p0 = transform(p0.pos)
+            transformed_p1 = transform(p1.pos)
+            if p0 == p1:
+                return glm.distance(p0, screen_pos)
+            # TODO : Тут надо найти нормальное уравнение прямой
+            pass
 
 
 class LineBy2Points(BaseLine):
@@ -195,11 +216,11 @@ class BasePlane(BaseGeometryObject):
         super(BasePlane, self).__init__("plane", name, id)
 
     @staticmethod
-    def is_coplanar(point1, point2, point3):
-        """Возвращает True, если точки компланарны и False в противном случае"""
-        mixed = glm.dot(glm.cross(point1 - point2, point2 - point3),
-                        point3 - point1)
-        return abs(mixed) < 1e-9
+    def is_collinear(point1, point2, point3):
+        """Возвращает True, если точки коллинеарны и False в противном случае"""
+        vec1 = point2.pos - point1.pos
+        vec2 = point3.pos - point2.pos
+        return abs(len(glm.cross(vec1, vec2))) < 1e-9
 
     def get_pivot_points(self):
         """Возвращает три различные точки на плоскости"""
@@ -210,8 +231,47 @@ class BasePlane(BaseGeometryObject):
         pass
 
 
+    #TODO : Прикрутить сюда NumPy
+    def get_normal_equation_form(self):
+        dir_vec1, dir_vec2 = self.get_direction_vectors()
+        p1, p2, p3 = self.get_pivot_points()
+        x1 = p1.x; y1 = p1.y; z1 = p1.z
+        x2 = p2.x; y2 = p2.y; z2 = p2.z
+        x3 = p3.x; y3 = p3.y; z3 = p3.z
+        #Пока не разоброался когда в знаменателе 0
+        p = x3 - x1 + y3 * ((x3 - x1) / (y1 - y2)) - y1 * ((x2 - x1) / (y1 - y2))
+        q = y3 * ((z2 - z1) / (y1 - y2)) + z3 - z1 - y1 * ((z2 - z1) / (y1 - y2))
+        c = p / -q
+        b = ((x2 - x1) + c * (z2 - z1)) / (y1 - y2)
+        d = -(x1 + b * y1 + c * z1)
+        a = 1
+        return a, b, c, d
+
+    def get_normal_vector(self):
+        a, b, c, d = self.get_normal_equation_form()
+        return glm.vec3(a, b, c)
+
+    def get_intersection_with_plane(self, other):
+        normal1 = self.get_normal_vector()
+        normal2 = other.get_normal_vector()
+        if abs(len(glm.cross(normal1, normal2))) < 1e-9:
+            return None
+
+    def get_dist_to_screen_pos(self, screen_pos, transform):
+        a, b, c = self.get_pivot_points()
+        a1 = transform(a)
+        b1 = transform(b)
+        c1 = transform(c)
+        if not(BasePlane.is_collinear(a1, b1, c1)):
+            return 0
+        # TODO: Все то же нормальное уравнение прямой в плоскости
+        return None
+
 class PlaneBy3Points(BasePlane):
-    def __init__(self, point1, point2, point3, name=None, id=None):
+    def __init__(self, point1, point2, point3, name=None, id=
+    None):
+        if BasePlane.is_collinear(point1, point2, point3):
+            raise Exception("Collinear points")
         super(PlaneBy3Points, self).__init__(name, id)
         self.point1 = point1
         self.point2 = point2
