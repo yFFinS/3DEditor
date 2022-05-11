@@ -1,3 +1,5 @@
+from typing import Callable
+
 from PyQt5.QtCore import QObject
 from PyQt5.QtGui import QWindow, QOpenGLContext, QSurfaceFormat
 from PyQt5.QtOpenGL import QGLWidget, QGLFormat
@@ -73,8 +75,8 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
 
         self.__scene = Scene()
         self.__camera_controller = None
-        self.__last_action = None
         self.__geometry_builder = None
+        self.__last_action = None
         self.__initialized = False
         self.__shaders = []
 
@@ -90,18 +92,20 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         self.__cancel_sc = QShortcut("Esc", self)
         self.__cancel_sc.activated.connect(self.__cancel)
 
+    @staticmethod
+    def __action(func):
+        def wrapper(self):
+            func(self)
+            self.__last_action = func
+
+        return wrapper
+
     def __cancel(self):
         if self.__geometry_builder is not None and self.__geometry_builder.has_any_progress:
             self.__geometry_builder.cancel()
         else:
             self.__scene.deselect([obj for obj in self.__scene.objects if obj.selected])
         self.update()
-
-    def __subscribe_to_scene(self):
-        self.__scene.on_object_added += self.__redraw_internal
-        self.__scene.on_object_removed += self.__redraw_internal
-        self.__scene.on_objects_selected += self.__redraw_internal
-        self.__scene.on_objects_deselected += self.__redraw_internal
 
     def __redraw_internal(self, *args, **kwargs):
         self.redraw()
@@ -124,7 +128,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         GL.glPolygonOffset(1, 1)
 
         self.__shaders = [ShaderProgram("shaders/default.vert", "shaders/default.frag"),
-                          ShaderProgram("shaders/point.vert", "shaders/default.frag"),
+                          ShaderProgram("shaders/point_inst.vert", "shaders/default.frag"),
                           ShaderProgram("shaders/line.vert", "shaders/default.frag"),
                           ShaderProgram("shaders/triangle.vert", "shaders/default.frag")]
 
@@ -172,6 +176,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
     def __delete_selected_objects(self):
         for obj in filter(lambda o: o.selected, list(self.__scene.objects)):
             self.__scene.remove_object(obj)
+
         self.redraw()
 
     def on_any_event(self, event: QEvent):
@@ -189,39 +194,42 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
             shader.dispose()
         self.__shaders.clear()
 
+    @__action
     def no_action(self):
         self.__geometry_builder = None
-        self.__last_action = self.no_action
 
+    @__action
     def move_object(self):
         # TODD:
         self.__geometry_builder = None
-        self.__last_action = self.move_object
 
+    @__action
     def create_point(self):
-        self.__geometry_builder = PointBuilder(self.__scene)
-        self.__subscribe_to_geometry_builder()
-        self.__last_action = self.create_point
+        self.__create_builder(PointBuilder)
 
+    @__action
     def create_line(self):
-        self.__geometry_builder = LineBuilder(self.__scene)
-        self.__subscribe_to_geometry_builder()
-        self.__last_action = self.create_line
+        self.__create_builder(LineBuilder)
 
+    @__action
     def create_plane(self):
-        self.__geometry_builder = PlaneBuilder(self.__scene)
-        self.__subscribe_to_geometry_builder()
-        self.__last_action = self.create_plane
+        self.__create_builder(PlaneBuilder)
 
+    @__action
     def create_edge(self):
-        self.__geometry_builder = EdgeBuilder(self.__scene)
-        self.__subscribe_to_geometry_builder()
-        self.__last_action = self.create_edge
+        self.__create_builder(EdgeBuilder)
 
+    @__action
     def create_face(self):
-        self.__geometry_builder = FaceBuilder(self.__scene)
+        self.__create_builder(FaceBuilder)
+
+    @__action
+    def create_cube(self):
+        self.__create_builder(CubeBuilder)
+
+    def __create_builder(self, builder_type):
+        self.__geometry_builder = builder_type(self.__scene)
         self.__subscribe_to_geometry_builder()
-        self.__last_action = self.create_face
 
     def __subscribe_to_geometry_builder(self):
         self.__geometry_builder.on_builder_ready += self.__on_builder_ready
@@ -229,7 +237,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
 
     def __on_builder_ready(self):
         self.__geometry_builder = None
-        self.__last_action()
+        self.__last_action(self)
 
     def __on_builder_canceled(self):
         self.__on_builder_ready()

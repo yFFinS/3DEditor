@@ -53,9 +53,15 @@ class SceneActions(QWidget, SceneActionsInterface):
         create_button("Line", self.action_line, "L")
         create_button("Plane", self.action_plane, "Shift+P")
         layout.addStretch()
+        create_button("Cube", self.action_cube, "Shift+C")
+        layout.addStretch()
         create_button("Stress", self.action_stress_test)
 
         self.setFixedHeight(layout.sizeHint().height())
+
+    def action_cube(self):
+        self.__set_button_selected(self.sender())
+        self.__gl_scene().create_cube()
 
     def action_stress_test(self):
         scene = self.__gl_scene().get_scene()
@@ -125,6 +131,7 @@ class SceneObjectList(QListWidget):
         self.itemSelectionChanged.connect(self.__selection_changed)
 
     def __subscribe_to_scene(self, scene: Scene):
+        return
         scene.on_object_added += self.on_object_added
         scene.on_object_removed += self.on_object_removed
         scene.on_objects_selected += self.on_objects_selected

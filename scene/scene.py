@@ -59,22 +59,22 @@ class Scene:
             others, points, lines, triangles = self.__group_objects_by_render_params(layer)
 
             for other in others:
-                self.__render_object(other)
+                self.__render_single(other)
 
             if triangles:
                 for triangle in triangles:
-                    self.__render_object(triangle)
+                    self.__render_single(triangle)
 
             GL.glDepthMask(GL.GL_FALSE)
             if lines:
                 GL.glLineWidth(1.4)
                 for line in lines:
-                    self.__render_object(line)
+                    self.__render_single(line)
 
             if points:
                 GL.glPointSize(6)
                 for point in points:
-                    self.__render_object(point)
+                    self.__render_single(point)
             GL.glDepthMask(GL.GL_TRUE)
 
     @staticmethod
@@ -106,7 +106,35 @@ class Scene:
                 others.append(obj)
         return others, points, lines, triangles
 
-    def __render_object(self, scene_object: RawSceneObject):
+    def __render_instanced(self, scene_objects: list[RawSceneObject]):
+        for obj in scene_objects:
+            obj.prepare_render(self.camera)
+
+        mvps = [obj.get_render_mat(self.camera) for obj in scene_objects]
+
+        # Предполагается, что у всех объектов один шейдер
+        shader = scene_objects[0].shader_program
+        shader.use()
+        shader.set_mat4("Instance.MVP", mvp)
+
+        selected_value = 1 if isinstance(scene_object, SceneObject) and scene_object.selected else -1
+        scene_object.shader_program.set_float("Instance.Selected",
+                                              selected_value)
+
+        scene_object.mesh.bind_vba()
+        indices = scene_object.mesh.get_index_count()
+        if indices != 0:
+            GL.glDrawElements(scene_object.render_mode,
+                              indices, GL.GL_UNSIGNED_INT, None)
+        else:
+            GL.glDrawArrays(scene_object.render_mode,
+                            0, scene_object.mesh.get_vertex_count())
+        scene_object.mesh.unbind_vba()
+
+        for obj in scene_objects:
+            obj.render_completed(self.camera)
+
+    def __render_single(self, scene_object: RawSceneObject):
         scene_object.prepare_render(self.camera)
 
         mvp = scene_object.get_render_mat(self.camera)
