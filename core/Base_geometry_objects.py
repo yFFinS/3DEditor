@@ -193,6 +193,15 @@ class BasePlane(BaseGeometryObject):
                         point3 - point1)
         return abs(mixed) < 1e-9
 
+    def is_collinear_to(self, plane: 'BasePlane') -> bool:
+        pivots1 = self.get_pivot_points()
+        pivots2 = plane.get_pivot_points()
+        norm1 = glm.normalize(glm.cross(pivots1[0] - pivots1[1], pivots1[0] - pivots1[2]))
+        norm2 = glm.normalize(glm.cross(pivots2[0] - pivots2[1], pivots2[0] - pivots2[2]))
+        dot = glm.dot(norm1, norm2)
+        print(dot)
+        return abs(abs(dot) - 1) < 1e-9
+
     def get_pivot_points(self):
         """Возвращает три различные точки на плоскости"""
         pass
@@ -266,7 +275,7 @@ class PlaneByPointAndPlane(BasePlane):
                self.point.pos + dir_vectors[1]
 
     def get_direction_vectors(self):
-        return self.plane.get_directional_vectors()
+        return self.plane.get_direction_vectors()
 
 
 class Segment(BaseGeometryObject):

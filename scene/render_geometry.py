@@ -1,4 +1,7 @@
+import functools
+
 import OpenGL.GL as GL
+import glm
 
 from core.Base_geometry_objects import *
 from render.mesh import Mesh
@@ -44,14 +47,16 @@ class ScenePoint(SceneObject):
         mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)]))
         return mesh
 
-    def update_hierarchy_position(self, pos: glm.vec3, ignored: set['SceneObject']):
+    def update_hierarchy_position(self, pos: glm.vec3,
+                                  ignored: set['SceneObject']):
         self.point.pos = pos
         self.transform.translation = pos
         for child in self.children:
             if child not in ignored:
                 child.on_parent_position_updated(self)
 
-    def get_selection_weight(self, camera: Camera, screen_pos: glm.vec2) -> float:
+    def get_selection_weight(self, camera: Camera,
+                             screen_pos: glm.vec2) -> float:
         spos = camera.world_to_screen(self.transform.translation)
         dist = glm.distance(screen_pos, spos)
 
@@ -75,13 +80,15 @@ class SceneLine(SceneObject):
         self.mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)] * 2))
 
     @classmethod
-    def by_point_and_line(cls, scene_point: ScenePoint, scene_line: 'SceneLine') -> 'SceneLine':
+    def by_point_and_line(cls, scene_point: ScenePoint,
+                          scene_line: 'SceneLine') -> 'SceneLine':
         line = LineByPointAndLine(scene_point.point, scene_line.line)
         self = cls(line, scene_point, scene_line)
         return self
 
     @classmethod
-    def by_two_points(cls, scene_point1: ScenePoint, scene_point2: ScenePoint) -> 'SceneLine':
+    def by_two_points(cls, scene_point1: ScenePoint,
+                      scene_point2: ScenePoint) -> 'SceneLine':
         line = LineBy2Points(scene_point1.point, scene_point2.point)
         self = cls(line, scene_point1, scene_point2)
         return self
@@ -89,14 +96,17 @@ class SceneLine(SceneObject):
     def get_render_mat(self, camera: Camera):
         return camera.proj_view_matrix
 
-    def update_hierarchy_position(self, pos: glm.vec3):
+    def update_hierarchy_position(self, pos: glm.vec3,
+                                  ignored: set['SceneObject']):
         self.transform.translation = pos
+        # TODO
 
     def update_mesh(self):
         # TODO: Умом
         dir_v = self.line.get_directional_vector()
         p1, p2 = self.line.get_pivot_points()
-        self.mesh.set_positions(np.array([p1 + 1000 * dir_v, p2 - 1000 * dir_v]))
+        self.mesh.set_positions(
+            np.array([p1 + 1000 * dir_v, p2 - 1000 * dir_v]))
 
     def prepare_render(self, camera: Camera):
         p1, p2 = self.line.get_pivot_points()
@@ -128,10 +138,13 @@ class ScenePlane(SceneObject):
 
         self.mesh = Mesh()
         self.__update_local_position()
-        self.mesh.set_colors(np.array([ScenePlane.COLOR] * self.mesh.get_vertex_count()))
+        self.mesh.set_indices(np.array([0, 1, 2, 0, 3, 2]))
+        self.mesh.set_colors(
+            np.array([ScenePlane.COLOR] * self.mesh.get_vertex_count()))
 
     @classmethod
-    def by_point_and_plane(cls, scene_point: ScenePoint, scene_plane: 'ScenePlane') -> 'ScenePlane':
+    def by_point_and_plane(cls, scene_point: ScenePoint,
+                           scene_plane: 'ScenePlane') -> 'ScenePlane':
         plane = PlaneByPointAndPlane(scene_point.point, scene_plane.plane)
         self = cls(plane, scene_point, scene_plane)
         return self
@@ -139,31 +152,59 @@ class ScenePlane(SceneObject):
     @classmethod
     def by_three_points(cls, scene_point1: ScenePoint, scene_point2: ScenePoint,
                         scene_point3: ScenePoint) -> 'ScenePlane':
-        plane = PlaneBy3Points(scene_point1.point, scene_point2.point, scene_point3.point)
+        plane = PlaneBy3Points(scene_point1.point, scene_point2.point,
+                               scene_point3.point)
         self = cls(plane, scene_point1, scene_point2, scene_point3)
         return self
 
     def __update_local_position(self):
         p1, p2, p3 = self.plane.get_pivot_points()
-        center = (p1 + p2 + p3) / 2
+        center = (p1 + p2 + p3) / 3
         self.transform.translation = center
-        self.mesh.set_positions(np.array([p1 - center, p2 - center, p3 - center]))
+        square_points = self.__get_square_points()
+        self.mesh.set_positions(np.array(square_points))
 
-    def update_hierarchy_position(self, pos: glm.vec3, ignored: set['SceneObject']):
+    def __get_square_points(self):
+        p1, p2, p3 = self.plane.get_pivot_points()
+        center = (p1 + p2 + p3) / 3
+        norm = glm.cross(p1 - p2, p1 - p3)
+        op1 = glm.normalize(p1 - center)
+        op2 = glm.normalize(glm.cross(norm, op1))
+        return [op1, op2, -op1, -op2]
+
+    def update_hierarchy_position(self, pos: glm.vec3,
+                                  ignored: set['SceneObject']):
         move = pos - self.transform.translation
         self.transform.translation = pos
 
-        p1, p2, p3 = [parent for parent in self.parents if isinstance(parent, ScenePoint)]
         ignored.add(self)
-        if p1 not in ignored:
-            p1.update_hierarchy_position(p1.transform.translation + move, ignored)
-        if p2 not in ignored:
-            p2.update_hierarchy_position(p2.transform.translation + move, ignored)
-        if p3 not in ignored:
-            p3.update_hierarchy_position(p3.transform.translation + move, ignored)
+        point_parents = [parent for parent in self.parents if
+                         isinstance(parent, ScenePoint)]
+        for i in range(min(len(point_parents), 3)):
+            point = point_parents[i]
+            point.update_hierarchy_position(point.transform.translation + move,
+                                            ignored)
+
+    def get_selection_weight(self, camera: Camera,
+                             click_pos: glm.vec2) -> float:
+        square_points = self.__get_square_points()
+        model = self.transform.model_matrix
+        transformed_points = [model * point for point in square_points]
+        polygon2d = [camera.world_to_screen(point) for point in
+                     transformed_points]
+        inside = is_inside_polygon(click_pos, polygon2d)
+        return 0.4 if inside else np.nan
 
     def on_parent_position_updated(self, parent: 'SceneObject'):
         self.__update_local_position()
+        for child in self.children:
+            if isinstance(child, ScenePlane):
+                child.on_parent_position_updated(self)
+
+    def prepare_render(self, camera: Camera):
+        dist = glm.distance(self.transform.translation, camera.translation)
+        self.transform.scale = glm.vec3(max(dist / 1.5, 1))
+        super(ScenePlane, self).prepare_render(camera)
 
 
 class SceneEdge(SceneObject):
@@ -177,10 +218,12 @@ class SceneEdge(SceneObject):
 
         self.mesh = Mesh()
         self.__update_local_position()
-        self.mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)] * self.mesh.get_vertex_count()))
+        self.mesh.set_colors(
+            np.array([glm.vec4(0, 0, 0, 1)] * self.mesh.get_vertex_count()))
 
     @classmethod
-    def by_two_points(cls, scene_point1: ScenePoint, scene_point2: ScenePoint) -> 'SceneEdge':
+    def by_two_points(cls, scene_point1: ScenePoint,
+                      scene_point2: ScenePoint) -> 'SceneEdge':
         edge = Segment(scene_point1.point, scene_point2.point)
         self = cls(edge, scene_point1, scene_point2)
         return self
@@ -191,16 +234,19 @@ class SceneEdge(SceneObject):
         half = (p2.pos - p1.pos) / 2
         self.mesh.set_positions(np.array([-half, half]))
 
-    def update_hierarchy_position(self, pos: glm.vec3, ignored: set['SceneObject']):
+    def update_hierarchy_position(self, pos: glm.vec3,
+                                  ignored: set['SceneObject']):
         move = pos - self.transform.translation
         self.transform.translation = pos
 
         p1, p2 = list(self.parents)
         ignored.add(self)
         if p1 not in ignored:
-            p1.update_hierarchy_position(p1.transform.translation + move, ignored)
+            p1.update_hierarchy_position(p1.transform.translation + move,
+                                         ignored)
         if p2 not in ignored:
-            p2.update_hierarchy_position(p2.transform.translation + move, ignored)
+            p2.update_hierarchy_position(p2.transform.translation + move,
+                                         ignored)
 
         for child in self.children:
             if child not in ignored:
@@ -223,36 +269,51 @@ class SceneFace(SceneObject):
 
         self.mesh = Mesh()
         self.__update_local_position()
-        self.mesh.set_colors(np.array([SceneFace.COLOR] * self.mesh.get_vertex_count()))
+        self.mesh.set_colors(
+            np.array([SceneFace.COLOR] * self.mesh.get_vertex_count()))
 
     @classmethod
     def by_three_points(cls, scene_point1: ScenePoint, scene_point2: ScenePoint,
                         scene_point3: ScenePoint) -> 'SceneFace':
-        face = Triangle(scene_point1.point, scene_point2.point, scene_point3.point)
+        face = Triangle(scene_point1.point, scene_point2.point,
+                        scene_point3.point)
         self = cls(face, scene_point1, scene_point2, scene_point3)
         return self
 
     def __update_local_position(self):
         p1, p2, p3 = self.face.point1, self.face.point2, self.face.point3
-        center = (p1.pos + p2.pos + p3.pos) / 2
+        center = (p1.pos + p2.pos + p3.pos) / 3
         self.transform.translation = center
-        self.mesh.set_positions(np.array([p1.pos - center, p2.pos - center, p3.pos - center]))
+        self.mesh.set_positions(
+            np.array([p1.pos - center, p2.pos - center, p3.pos - center]))
 
-    def update_hierarchy_position(self, pos: glm.vec3, ignored: set['SceneObject']):
+    def update_hierarchy_position(self, pos: glm.vec3,
+                                  ignored: set['SceneObject']):
         move = pos - self.transform.translation
         self.transform.translation = pos
 
-        p1, p2, p3 = [parent for parent in self.parents if isinstance(parent, ScenePoint)]
+        p1, p2, p3 = [parent for parent in self.parents if
+                      isinstance(parent, ScenePoint)]
         ignored.add(self)
         if p1 not in ignored:
-            p1.update_hierarchy_position(p1.transform.translation + move, ignored)
+            p1.update_hierarchy_position(p1.transform.translation + move,
+                                         ignored)
         if p2 not in ignored:
-            p2.update_hierarchy_position(p2.transform.translation + move, ignored)
+            p2.update_hierarchy_position(p2.transform.translation + move,
+                                         ignored)
         if p3 not in ignored:
-            p3.update_hierarchy_position(p3.transform.translation + move, ignored)
+            p3.update_hierarchy_position(p3.transform.translation + move,
+                                         ignored)
 
     def on_parent_position_updated(self, parent: 'SceneObject'):
         self.__update_local_position()
+
+    def get_selection_weight(self, camera: Camera,
+                             click_pos: glm.vec2) -> float:
+        vertices = [self.face.point1, self.face.point2, self.face.point3]
+        polygon2d = [camera.world_to_screen(point.pos) for point in vertices]
+        inside = is_inside_polygon(click_pos, polygon2d)
+        return 0.6 if inside else np.nan
 
 
 class SceneCoordAxis(RawSceneObject):
@@ -293,12 +354,13 @@ class SceneCoordAxis(RawSceneObject):
 
         self.mesh = Mesh()
         self.mesh.set_positions(positions)
-        self.mesh.set_colors(np.array([SceneCoordAxis.X_COLOR, SceneCoordAxis.X_COLOR,
-                                       SceneCoordAxis.Y_COLOR, SceneCoordAxis.Y_COLOR,
-                                       SceneCoordAxis.Z_COLOR, SceneCoordAxis.Z_COLOR,
-                                       SceneCoordAxis.NEG_X_COLOR, SceneCoordAxis.NEG_X_COLOR,
-                                       SceneCoordAxis.NEG_Y_COLOR, SceneCoordAxis.NEG_Y_COLOR,
-                                       SceneCoordAxis.NEG_Z_COLOR, SceneCoordAxis.NEG_Z_COLOR]))
+        self.mesh.set_colors(
+            np.array([SceneCoordAxis.X_COLOR, SceneCoordAxis.X_COLOR,
+                      SceneCoordAxis.Y_COLOR, SceneCoordAxis.Y_COLOR,
+                      SceneCoordAxis.Z_COLOR, SceneCoordAxis.Z_COLOR,
+                      SceneCoordAxis.NEG_X_COLOR, SceneCoordAxis.NEG_X_COLOR,
+                      SceneCoordAxis.NEG_Y_COLOR, SceneCoordAxis.NEG_Y_COLOR,
+                      SceneCoordAxis.NEG_Z_COLOR, SceneCoordAxis.NEG_Z_COLOR]))
 
     def adjust_to_camera(self, camera: Camera):
         camera_pos = camera.translation
@@ -357,7 +419,8 @@ class SceneGrid(RawSceneObject):
     def adjust_to_camera(self, camera: Camera):
         camera_pos = camera.translation
         step = SceneGrid.CELL_SIZE_STEP
-        self.cell_size = max(abs(camera_pos.y) // step * step, SceneGrid.MIN_CELL_SIZE)
+        self.cell_size = max(abs(camera_pos.y) // step * step,
+                             SceneGrid.MIN_CELL_SIZE)
         self.transform.scale = glm.vec3(self.cell_size)
 
         cam_x, cam_z = camera_pos.x, camera_pos.z

@@ -49,7 +49,8 @@ def intersect_line_plane(l1, l2, point, norm):
 
 def intersect_line_triangle(l1, l2, t1, t2, t3):
     """ Находит точку пересечения прямой и треугольника """
-    plane_intersection = intersect_line_plane(l1, l2, t1, glm.cross(t2 - t1, t3 - t1))
+    plane_intersection = intersect_line_plane(l1, l2, t1,
+                                              glm.cross(t2 - t1, t3 - t1))
     if not plane_intersection:
         return None
     t1 -= plane_intersection
@@ -71,7 +72,9 @@ def intersect_line_frustum(l1, l2, frustum_edges):
 
     def intersect(t1, t2, t3):
         intersection = intersect_line_triangle(l1, l2, t1, t2, t3)
-        if intersection and not any(almost_equal_vec(intersection, prev_int) for prev_int in intersections):
+        if intersection and not any(
+                almost_equal_vec(intersection, prev_int) for prev_int in
+                intersections):
             intersections.append(intersection)
 
     intersect(tln, trn, bln)
@@ -98,4 +101,19 @@ def extract_pos(event: QMouseEvent) -> glm.vec2:
 
 
 def round_vec3(vec3: glm.vec3, digits: int = 4) -> glm.vec3:
-    return glm.vec3(round(vec3.x, digits), round(vec3.y, digits), round(vec3.z, digits))
+    return glm.vec3(round(vec3.x, digits), round(vec3.y, digits),
+                    round(vec3.z, digits))
+
+
+def is_inside_polygon(point: glm.vec2, polygon: list[glm.vec2]) -> bool:
+    """https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html"""
+    result = False
+    j = len(polygon) - 1
+    for i in range(len(polygon)):
+        if (((polygon[i].y > point.y) != (polygon[j].y > point.y)) and
+                (point.x < (polygon[j].x - polygon[i].x) * (
+                        point.y - polygon[i].y) / (
+                         polygon[j].y - polygon[i].y) + polygon[i].x)):
+            result = not result
+        j = i
+    return result

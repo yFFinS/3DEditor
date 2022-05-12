@@ -16,6 +16,7 @@ class Mesh:
 
         self.__vbo_positions = VertexBuffer()
         self.__vbo_colors = VertexBuffer()
+
         self.__ibo = IndexBuffer()
 
         self.__vba.bind_vertex_buffer(self.__vbo_positions, 0, 0, 3, GL.GL_FLOAT, 12)

@@ -7,6 +7,7 @@ from OpenGL import GL
 
 from core.event import Event
 from .camera import Camera
+from .render_geometry import ScenePlane
 from .scene_object import SceneObject, RawSceneObject
 
 
@@ -54,9 +55,10 @@ class Scene:
         if not self.camera:
             return
 
-        layers = self.__group_by_render_layer(self.all_objects)
+        layers, transparent = self.__group_by_render_layer(self.all_objects)
         for layer in layers:
-            others, points, lines, triangles = self.__group_objects_by_render_params(layer)
+            others, points, lines, triangles \
+                = self.__group_objects_by_render_params(layer)
 
             for other in others:
                 self.__render_object(other)
@@ -77,17 +79,29 @@ class Scene:
                     self.__render_object(point)
             GL.glDepthMask(GL.GL_TRUE)
 
+        GL.glDisable(GL.GL_DEPTH_TEST)
+        for tr in transparent:
+            self.__render_object(tr)
+
+        GL.glEnable(GL.GL_DEPTH_TEST)
+
+
     @staticmethod
     def __group_by_render_layer(objects):
         groups = {}
+        transparent = []
         for obj in objects:
+            if isinstance(obj, ScenePlane):
+                transparent.append(obj)
+                continue
             layer = obj.render_layer
             if layer not in groups:
                 groups[layer] = [obj]
             else:
                 groups[layer].append(obj)
-        for key in sorted(groups):
-            yield groups[key]
+
+        result = [groups[key] for key in sorted(groups)]
+        return result, transparent
 
     @staticmethod
     def __group_objects_by_render_params(objects):
@@ -114,7 +128,8 @@ class Scene:
         scene_object.shader_program.use()
         scene_object.shader_program.set_mat4("Instance.MVP", mvp)
 
-        selected_value = 1 if isinstance(scene_object, SceneObject) and scene_object.selected else -1
+        selected_value = 1 if isinstance(scene_object,
+                                         SceneObject) and scene_object.selected else -1
         scene_object.shader_program.set_float("Instance.Selected",
                                               selected_value)
 
@@ -167,12 +182,14 @@ class Scene:
         if event_args:
             self.on_objects_deselected.invoke(scene_objects)
 
-    def find_selectable(self, screen_pos: glm.vec2, mask: int = 0xFFFFFFFF, allow_selected: bool = False) -> \
+    def find_selectable(self, screen_pos: glm.vec2, mask: int = 0xFFFFFFFF,
+                        allow_selected: bool = False) -> \
             Optional[SceneObject]:
         to_select = None
         select_w = -1
         for obj in self.objects:
-            if not allow_selected and obj.selected or (mask & obj.selection_mask) == 0:
+            if not allow_selected and obj.selected or (
+                    mask & obj.selection_mask) == 0:
                 continue
             adjusted_pos = glm.vec2(screen_pos.x,
                                     self.camera.height - screen_pos.y)

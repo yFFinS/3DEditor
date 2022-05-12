@@ -205,7 +205,7 @@ class SceneObjectWidget(QWidget):
 
         self.__layout.addWidget(self.__name_label)
         self.__layout.setContentsMargins(5, 2, 5, 2)
-        self.setFixedHeight(20)
+        self.setFixedHeight(26)
 
         self.__layout.addStretch()
         self.setLayout(self.__layout)

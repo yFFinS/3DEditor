@@ -1,3 +1,4 @@
+import OpenGL.raw.GL.VERSION.GL_1_4
 from PyQt5.QtCore import QObject
 from PyQt5.QtGui import QWindow, QOpenGLContext, QSurfaceFormat
 from PyQt5.QtOpenGL import QGLWidget, QGLFormat
@@ -91,10 +92,11 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         self.__cancel_sc.activated.connect(self.__cancel)
 
     def __cancel(self):
-        if self.__geometry_builder is not None and self.__geometry_builder.has_any_progress:
+        if self.__geometry_builder is not None \
+                and self.__geometry_builder.has_any_progress:
             self.__geometry_builder.cancel()
         else:
-            self.__scene.deselect([obj for obj in self.__scene.objects if obj.selected])
+            self.__scene.deselect_all()
         self.update()
 
     def __subscribe_to_scene(self):
@@ -123,10 +125,11 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
         GL.glPolygonOffset(1, 1)
 
-        self.__shaders = [ShaderProgram("shaders/default.vert", "shaders/default.frag"),
-                          ShaderProgram("shaders/point.vert", "shaders/default.frag"),
-                          ShaderProgram("shaders/line.vert", "shaders/default.frag"),
-                          ShaderProgram("shaders/triangle.vert", "shaders/default.frag")]
+        self.__shaders = [
+            ShaderProgram("shaders/default.vert", "shaders/default.frag"),
+            ShaderProgram("shaders/point.vert", "shaders/default.frag"),
+            ShaderProgram("shaders/line.vert", "shaders/default.frag"),
+            ShaderProgram("shaders/triangle.vert", "shaders/default.frag")]
 
         RawSceneObject.SHADER_PROGRAM = self.__shaders[0]
         ScenePoint.SHADER_PROGRAM = self.__shaders[1]
@@ -228,11 +231,11 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         self.__geometry_builder.on_builder_canceled += self.__on_builder_canceled
 
     def __on_builder_ready(self):
-        self.__geometry_builder = None
-        self.__last_action()
+        pass
 
     def __on_builder_canceled(self):
-        self.__on_builder_ready()
+        self.__geometry_builder = None
+        self.__last_action()
 
     def handle_move_object(self, event):
         # TODO:
@@ -368,8 +371,22 @@ class SceneObjectProperties(QWidget):
         self.__object_name_edit.setText(str(len(self.__selected_objects)))
         if len(self.__selected_objects) == 1:
             self.__set_object(self.__selected_objects[0])
+        elif len(self.__selected_objects) > 1:
+            self.__prepare_multi_edit()
         else:
             self.__clear_and_disable_edit()
+
+    def __prepare_multi_edit(self):
+        self.__clear_and_disable_edit()
+        return
+        # TODO
+        # self.__scene_object = None
+        # self.__object_name_edit.setText("—")
+        # self.__object_name_edit.setEnabled(True)
+        # self.x_edit.setText("—")
+        # self.y_edit.setText("—")
+        # self.z_edit.setText("—")
+        # self.__xyz.setEnabled(True)
 
     def __on_objects_deselected(self, scene_objects):
         self.__selected_objects = \
@@ -378,7 +395,7 @@ class SceneObjectProperties(QWidget):
         self.__object_name_edit.setText(str(len(self.__selected_objects)))
         if len(self.__selected_objects) == 1:
             self.__set_object(self.__selected_objects[0])
-        else:
+        elif not self.__selected_objects:
             self.__clear_and_disable_edit()
 
     def __clear_and_disable_edit(self):
@@ -403,11 +420,29 @@ class SceneObjectProperties(QWidget):
         if prim is not None:
             self.__object_name_edit.setText(prim.name)
         pos = self.__scene_object.transform.translation
-        self.x_edit.setText(f'{pos.x:4f}')
-        self.y_edit.setText(f'{pos.y:4f}')
-        self.z_edit.setText(f'{pos.z:4f}')
+        self.x_edit.setText(f'{pos.x:.4f}')
+        self.y_edit.setText(f'{pos.y:.4f}')
+        self.z_edit.setText(f'{pos.z:.4f}')
 
     def update_object(self):
+        if len(self.__selected_objects) == 1:
+            self.__update_single()
+        else:
+            self.__update_multiple()
+
+    @staticmethod
+    def __get_float(text_edit):
+        try:
+            return float(text_edit.text())
+        except ValueError:
+            return None
+
+    def __update_multiple(self):
+        self.__update_single()
+        return
+        # TODO
+
+    def __update_single(self):
         try:
             name = self.__object_name_edit.text()
             pos = glm.vec3(float(self.x_edit.text()),

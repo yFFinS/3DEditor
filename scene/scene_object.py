@@ -47,7 +47,7 @@ class SceneObject(RawSceneObject):
 
     def __init__(self, primitive: BaseGeometryObject, *parents: 'SceneObject'):
         super(SceneObject, self).__init__(primitive.id)
-        
+
         self.__primitive = primitive
         self.selected = False
         self.selection_mask = 0
@@ -64,10 +64,12 @@ class SceneObject(RawSceneObject):
 
     @classmethod
     def common_child(cls: Type[_T], *objects: 'SceneObject') -> Optional[_T]:
-        children_sets = [set(child_id for child_id, child in obj.__children.items()
-                             if isinstance(child, cls)) for obj in objects]
+        children_sets = [
+            set(child_id for child_id, child in obj.__children.items()
+                if isinstance(child, cls)) for obj in objects]
         intersection = set.intersection(*children_sets)
-        return objects[0].__children[next(iter(intersection))] if intersection else None
+        return objects[0].__children[
+            next(iter(intersection))] if intersection else None
 
     @property
     def parents(self) -> Iterable['SceneObject']:
@@ -118,15 +120,18 @@ class SceneObject(RawSceneObject):
     def update_position(self, pos: glm.vec3):
         self.update_hierarchy_position(pos, set())
 
-    def update_hierarchy_position(self, pos: glm.vec3, ignored: set['SceneObject']):
+    def update_hierarchy_position(self, pos: glm.vec3,
+                                  ignored: set['SceneObject']):
         self.transform.translation = pos
 
     def on_parent_position_updated(self, parent: 'SceneObject'):
         pass
 
-    def get_selection_weight(self, camera: Camera, click_pos: glm.vec2) -> float:
+    def get_selection_weight(self, camera: Camera,
+                             click_pos: glm.vec2) -> float:
         """
-            Возвращает значение от 0 до 1. Чем больше значение, тем больше приоритет выбора этого объекта.
+            Возвращает значение от 0 до 1. Чем больше значение, тем больше
+             приоритет выбора этого объекта.
             Возвращает NaN, если объект выбирать не нужно.
         """
         return np.nan
