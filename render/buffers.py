@@ -32,8 +32,14 @@ class VertexBuffer(Buffer):
     def __init__(self):
         super(VertexBuffer, self).__init__(GL.GL_ARRAY_BUFFER)
 
+    def reserve_size(self, size):
+        GL.glNamedBufferStorage(self.id, size, [])
+
     def set_data(self, size: int, data, usage: GL.Constant = GL.GL_STATIC_DRAW):
         GL.glNamedBufferData(self.id, size, data, usage)
+
+    def set_data_offset(self, size: int, offset: int, data, usage: GL.Constant = GL.GL_STATIC_DRAW):
+        GL.glNamedBufferSubData(self.id, offset, size, data, usage)
 
 
 class IndexBuffer(Buffer):

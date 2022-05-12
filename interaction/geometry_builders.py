@@ -374,3 +374,124 @@ class FaceBuilder(BaseBuilder):
             if self.edge is not None:
                 scene.remove_object(self.edge)
         return super(FaceBuilder, self).cancel()
+
+
+class CubeBuilder(BaseBuilder):
+    def __init__(self, scene: Scene):
+        super(CubeBuilder, self).__init__(scene)
+        self.p1 = None
+
+    def on_mouse_pressed(self, event: QMouseEvent):
+        if event.button() != Qt.LeftButton:
+            return False
+
+        self._deselect_all_once()
+        self._has_any_progress = True
+
+        camera = self._scene().camera
+        pos = extract_pos(event)
+        snap = self._try_snap_to(pos)
+
+        if snap:
+            if snap == self.p1:
+                return False
+            point = snap
+            self._scene().select(point)
+        else:
+            ray = camera.screen_to_world(pos)
+            place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
+            place = round_vec3(place)
+            point = ScenePoint.from_pos(place)
+            self._push_object(point, True)
+
+        if self.p1:
+            self.__create_cube(point)
+            self.on_builder_ready.invoke()
+        else:
+            self.p1 = point
+
+        return True
+
+    def __create_cube(self, p2):
+        pos1 = self.p1.transform.translation
+        pos2 = p2.transform.translation
+        dx = glm.vec3(pos2.x - pos1.x, 0, 0)
+        dy = glm.vec3(0, pos2.y - pos1.y, 0)
+        dz = glm.vec3(0, 0, pos2.z - pos1.z)
+
+        """
+        Определяет расположение точки относительно смотрящего
+         
+        f - far  | n - near
+        b - bot  | t - top
+        l - left | r - right
+        
+        pos1 = fbl
+        pos2 = ntr
+        """
+
+        fbl = pos1
+
+        fbr = fbl + dx
+        ftl = fbl + dy
+        ftr = fbr + dy
+        nbl = fbl + dz
+        ntl = nbl + dy
+        nbr = nbl + dx
+
+        positions = [fbr, ftl, ftr, nbl, ntl, nbr]
+        points = [self.p1] + [ScenePoint.from_pos(pos) for pos in positions] + [p2]
+        for i in range(1, len(points) - 1):
+            self._push_object(points[i], True)
+
+        def make_face(first_index, second_index, third_index):
+            first_point = points[first_index]
+            second_point = points[second_index]
+            third_point = points[third_index]
+            face = self.__face_from_points(first_point, second_point, third_point)
+            first_edge = self.__edge_from_points(first_point, second_point)
+            second_edge = self.__edge_from_points(second_point, third_point)
+            third_edge = self.__edge_from_points(third_point, first_point)
+            face.add_parents(first_edge, second_edge, third_edge)
+
+        make_face(1, 2, 3)
+        make_face(0, 1, 2)
+        make_face(0, 4, 5)
+        make_face(0, 5, 2)
+        make_face(0, 4, 1)
+        make_face(2, 3, 7)
+        make_face(2, 5, 7)
+        make_face(4, 7, 5)
+        make_face(4, 6, 7)
+        make_face(1, 4, 6)
+        make_face(1, 3, 6)
+        make_face(3, 7, 6)
+
+    def __edge_from_points(self, p1, p2):
+        child = SceneEdge.common_child(p1, p2)
+        if child is not None:
+            self._scene().select(child)
+            return child
+        edge = SceneEdge.by_two_points(p1, p2)
+        self._push_object(edge, True)
+        return edge
+
+    def __face_from_points(self, p1, p2, p3):
+        child = SceneFace.common_child(p1, p2, p3)
+        if child is not None:
+            self._scene().select(child)
+            return child
+        face = SceneFace.by_three_points(p1, p2, p3)
+        self._push_object(face, True)
+        return face
+
+    def cancel(self):
+        scene = self._scene()
+        if self._has_any_progress:
+            if self.p1 is not None:
+                scene.remove_object(self.p1)
+            if self.p2 is not None:
+                scene.remove_object(self.p2)
+            if self.edge is not None:
+                scene.remove_object(self.edge)
+        return super(CubeBuilder, self).cancel()

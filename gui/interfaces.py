@@ -53,6 +53,9 @@ class GLSceneInterface:
     def create_face(self):
         raise NotImplementedError
 
+    def create_rect(self):
+        raise NotImplementedError
+
     def try_select_scene_object(self, event: QMouseEvent) -> bool:
         raise NotImplementedError
 

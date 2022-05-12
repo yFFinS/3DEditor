@@ -53,9 +53,15 @@ class SceneActions(QWidget, SceneActionsInterface):
         create_button("Line", self.action_line, "L")
         create_button("Plane", self.action_plane, "Shift+P")
         layout.addStretch()
+        create_button("Rect", self.action_rect, "Shift+R")
+        layout.addStretch()
         create_button("Stress", self.action_stress_test)
 
         self.setFixedHeight(layout.sizeHint().height())
+
+    def action_rect(self):
+        self.__set_button_selected(self.sender())
+        self.__gl_scene().create_rect()
 
     def action_stress_test(self):
         scene = self.__gl_scene().get_scene()
