@@ -146,6 +146,8 @@ class PlaneBuilder(BaseBuilder):
         super(PlaneBuilder, self).__init__(scene)
         self.points = []
         self.plane = None
+        self.line = None
+        self.segment = None
 
     def on_mouse_pressed(self, event: QMouseEvent):
         if event.button() != Qt.LeftButton:
@@ -160,11 +162,11 @@ class PlaneBuilder(BaseBuilder):
 
         mask = SELECT_POINT
         if len(self.points) < 2:
-            mask |= SELECT_PLANE
+            mask |= SELECT_PLANE | SELECT_EDGE | SELECT_LINE
         snap = self._try_snap_to(pos, mask=mask)
 
         if snap:
-            if snap in self.points or snap == self.plane:
+            if snap in self.points or snap == self.plane or snap == self.line or snap == self.segment:
                 return False
             if isinstance(snap, ScenePlane):
                 if self.plane is not None:
@@ -181,17 +183,23 @@ class PlaneBuilder(BaseBuilder):
             self._push_object(point, True)
             self.points.append(point)
 
-        if self.plane is not None and len(self.points) == 1:
-            plane = self.__plane_from_point_and_plane(self.points[0], self.plane)
-            self.plane.add_children(plane)
-            self._set_ready()
-            self.points.clear()
-            self.plane = None
+        plane = None
+        if len(self.points) == 1:
+            if self.plane:
+                plane = self.__plane_from_point_and_plane(self.points[0], self.plane)
+            elif self.line:
+                plane = self.__plane_from_point_and_line(self.points[0], self.line)
+            elif self.segment:
+                plane = self.__plane_from_point_and_segment(self.points[0], self.segment)
         elif len(self.points) == 3:
-            self.__plane_from_points(*self.points)
+            plane = self.__plane_from_points(*self.points)
+
+        if plane:
             self._set_ready()
             self.points.clear()
             self.plane = None
+            self.line = None
+            self.segment = None
 
         return True
 
@@ -201,6 +209,24 @@ class PlaneBuilder(BaseBuilder):
             self._scene().select(child)
             return child
         plane = ScenePlane.by_point_and_plane(point, plane)
+        self._push_object(plane, True)
+        return plane
+
+    def __plane_from_point_and_line(self, point, line):
+        child = ScenePlane.common_child(point, line)
+        if child is not None:
+            self._scene().select(child)
+            return child
+        plane = ScenePlane.by_point_and_line(point, line)
+        self._push_object(plane, True)
+        return plane
+
+    def __plane_from_point_and_segment(self, point, segment):
+        child = ScenePlane.common_child(point, segment)
+        if child is not None:
+            self._scene().select(child)
+            return child
+        plane = ScenePlane.by_point_and_segment(point, segment)
         self._push_object(plane, True)
         return plane
 
@@ -219,6 +245,10 @@ class PlaneBuilder(BaseBuilder):
             scene.remove_object(point)
         if self.plane is not None:
             scene.remove_object(self.plane)
+        if self.line is not None:
+            scene.remove_object(self.line)
+        if self.segment is not None:
+            scene.remove_object(self.segment)
         super(PlaneBuilder, self).cancel()
 
 
@@ -232,7 +262,7 @@ class EdgeBuilder(BaseBuilder):
         if event.button() != Qt.LeftButton:
             return False
 
-        shift = event.modifiers() & Qt.ShiftModifier
+        shift = bool(event.modifiers() & Qt.ShiftModifier)
         if not shift and (self.__shift_used or self._ready):
             self.p1 = None
             self.__shift_used = False
@@ -326,7 +356,7 @@ class FaceBuilder(BaseBuilder):
             point = ScenePoint.from_pos(place)
             self._push_object(point, True)
 
-        if self.p2:
+        if self.p2 and self.edge is not None:
             edge2 = self.__edge_from_points(self.p2, point)
             edge3 = self.__edge_from_points(point, self.p1)
             face = self.__face_from_points(self.p1, self.p2, point)
@@ -376,9 +406,9 @@ class FaceBuilder(BaseBuilder):
         return super(FaceBuilder, self).cancel()
 
 
-class CubeBuilder(BaseBuilder):
+class RectBuilder(BaseBuilder):
     def __init__(self, scene: Scene):
-        super(CubeBuilder, self).__init__(scene)
+        super(RectBuilder, self).__init__(scene)
         self.p1 = None
 
     def on_mouse_pressed(self, event: QMouseEvent):
@@ -406,7 +436,8 @@ class CubeBuilder(BaseBuilder):
 
         if self.p1:
             self.__create_cube(point)
-            self.on_builder_ready.invoke()
+            self._set_ready()
+            self.p1 = None
         else:
             self.p1 = point
 
@@ -490,8 +521,4 @@ class CubeBuilder(BaseBuilder):
         if self._has_any_progress:
             if self.p1 is not None:
                 scene.remove_object(self.p1)
-            if self.p2 is not None:
-                scene.remove_object(self.p2)
-            if self.edge is not None:
-                scene.remove_object(self.edge)
-        return super(CubeBuilder, self).cancel()
+        return super(RectBuilder, self).cancel()

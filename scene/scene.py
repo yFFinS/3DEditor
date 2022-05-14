@@ -1,3 +1,5 @@
+import itertools
+
 import glm
 import numpy as np
 
@@ -5,6 +7,7 @@ from typing import Iterable, Optional, Union
 
 from OpenGL import GL
 
+from profiling.profiler import profile
 from core.event import Event
 from .camera import Camera
 from .render_geometry import ScenePlane
@@ -16,27 +19,51 @@ class Scene:
         self.__objects = {}
         self.camera: Optional[Camera] = None
 
-        self.on_object_added = Event()
-        self.on_object_removed = Event()
+        self.on_objects_added = Event()
+        self.on_objects_removed = Event()
         self.on_objects_selected = Event()
         self.on_objects_deselected = Event()
 
+    @profile
     def add_object(self, scene_object: RawSceneObject):
         self.__objects[scene_object.id] = scene_object
         if isinstance(scene_object, SceneObject):
-            self.on_object_added.invoke(scene_object)
+            self.on_objects_added.invoke([scene_object])
 
+    @profile
     def remove_object(self, scene_object: RawSceneObject):
+        removed = self.__remove_object_silent(scene_object)
+        self.on_objects_removed.invoke(removed)
+
+    @profile
+    def __remove_object_silent(self, scene_object: RawSceneObject) -> list[RawSceneObject]:
         if scene_object.id not in self.__objects:
-            return
+            return []
         self.__objects.pop(scene_object.id)
         if not isinstance(scene_object, SceneObject):
-            return
+            return []
+        removed = [scene_object]
         if scene_object.selected:
             self.deselect(scene_object)
         for child in scene_object.children:
-            self.remove_object(child)
-        self.on_object_removed.invoke(scene_object)
+            removed.extend(self.__remove_object_silent(child))
+        return removed
+
+    @profile
+    def add_objects(self, scene_objects: Iterable[RawSceneObject]):
+        invoke_list = []
+        for obj in scene_objects:
+            self.__objects[obj.id] = obj
+            if isinstance(obj, SceneObject):
+                invoke_list.append(obj)
+        self.on_objects_added.invoke(invoke_list)
+
+    @profile
+    def remove_objects(self, scene_objects: Iterable[RawSceneObject]):
+        removed = []
+        for obj in scene_objects:
+            removed.extend(self.__remove_object_silent(obj))
+        self.on_objects_removed.invoke(removed)
 
     @property
     def all_objects(self) -> Iterable[RawSceneObject]:
@@ -51,6 +78,7 @@ class Scene:
     def load(self, filename: str):
         pass
 
+    @profile
     def render(self):
         if not self.camera:
             return
@@ -86,6 +114,7 @@ class Scene:
         GL.glEnable(GL.GL_DEPTH_TEST)
 
     @staticmethod
+    @profile
     def __group_by_render_layer(objects):
         groups = {}
         transparent = []
@@ -103,6 +132,7 @@ class Scene:
         return result, transparent
 
     @staticmethod
+    @profile
     def __group_objects_by_render_params(objects):
         others, points, lines, triangles = [], [], [], []
         for obj in objects:
@@ -120,33 +150,35 @@ class Scene:
         return others, points, lines, triangles
 
     def __render_instanced(self, scene_objects: list[RawSceneObject]):
-        for obj in scene_objects:
-            obj.prepare_render(self.camera)
+        raise NotImplemented
+        # for obj in scene_objects:
+        #     obj.prepare_render(self.camera)
+        #
+        # mvps = [obj.get_render_mat(self.camera) for obj in scene_objects]
+        #
+        # # Предполагается, что у всех объектов один шейдер
+        # shader = scene_objects[0].shader_program
+        # shader.use()
+        # shader.set_mat4("Instance.MVP", mvp)
+        #
+        # selected_value = 1 if isinstance(scene_object, SceneObject) and scene_object.selected else -1
+        # scene_object.shader_program.set_float("Instance.Selected",
+        #                                       selected_value)
+        #
+        # scene_object.mesh.bind_vba()
+        # indices = scene_object.mesh.get_index_count()
+        # if indices != 0:
+        #     GL.glDrawElements(scene_object.render_mode,
+        #                       indices, GL.GL_UNSIGNED_INT, None)
+        # else:
+        #     GL.glDrawArrays(scene_object.render_mode,
+        #                     0, scene_object.mesh.get_vertex_count())
+        # scene_object.mesh.unbind_vba()
+        #
+        # for obj in scene_objects:
+        #     obj.render_completed(self.camera)
 
-        mvps = [obj.get_render_mat(self.camera) for obj in scene_objects]
-
-        # Предполагается, что у всех объектов один шейдер
-        shader = scene_objects[0].shader_program
-        shader.use()
-        shader.set_mat4("Instance.MVP", mvp)
-
-        selected_value = 1 if isinstance(scene_object, SceneObject) and scene_object.selected else -1
-        scene_object.shader_program.set_float("Instance.Selected",
-                                              selected_value)
-
-        scene_object.mesh.bind_vba()
-        indices = scene_object.mesh.get_index_count()
-        if indices != 0:
-            GL.glDrawElements(scene_object.render_mode,
-                              indices, GL.GL_UNSIGNED_INT, None)
-        else:
-            GL.glDrawArrays(scene_object.render_mode,
-                            0, scene_object.mesh.get_vertex_count())
-        scene_object.mesh.unbind_vba()
-
-        for obj in scene_objects:
-            obj.render_completed(self.camera)
-
+    @profile
     def __render_single(self, scene_object: RawSceneObject):
         scene_object.prepare_render(self.camera)
 
@@ -176,6 +208,7 @@ class Scene:
         self.__objects.clear()
         self.camera = None
 
+    @profile
     def select(self, scene_objects: Union[SceneObject, list[SceneObject]]):
         if not scene_objects:
             return
@@ -191,9 +224,11 @@ class Scene:
         if event_args:
             self.on_objects_selected.invoke(scene_objects)
 
+    @profile
     def deselect_all(self):
         self.deselect([obj for obj in self.objects if obj.selected])
 
+    @profile
     def deselect(self, scene_objects: Union[SceneObject, list[SceneObject]]):
         if not scene_objects:
             return
@@ -209,6 +244,7 @@ class Scene:
         if event_args:
             self.on_objects_deselected.invoke(scene_objects)
 
+    @profile
     def find_selectable(self, screen_pos: glm.vec2, mask: int = 0xFFFFFFFF,
                         allow_selected: bool = False) -> \
             Optional[SceneObject]:
@@ -218,9 +254,7 @@ class Scene:
             if not allow_selected and obj.selected or (
                     mask & obj.selection_mask) == 0:
                 continue
-            adjusted_pos = glm.vec2(screen_pos.x,
-                                    self.camera.height - screen_pos.y)
-            weight = obj.get_selection_weight(self.camera, adjusted_pos)
+            weight = obj.get_selection_weight(self.camera, screen_pos)
             if np.isnan(weight):
                 continue
             if weight < 0 or weight > 1:

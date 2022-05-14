@@ -37,62 +37,40 @@ def pyramid_volume_sign(s, t1, t2, t3):
     return glm.sign(glm.dot(glm.cross(t1 - s, t2 - s), t3 - s))
 
 
-def intersect_line_plane(l1, l2, point, norm):
-    dir_v = glm.normalize(l2 - l1)
-    den = glm.dot(dir_v, norm)
+def ray_plane_intersection_distance(origin: glm.vec3, direction: glm.vec3, point: glm.vec3, norm: glm.vec3) -> float:
+    den = glm.dot(direction, norm)
     if almost_equal(den, 0):
-        return None
+        return np.nan
 
-    dist = glm.dot(point - l1, norm) / den
-    return l1 + dir_v * dist
-
-
-def intersect_line_triangle(l1, l2, t1, t2, t3):
-    """ Находит точку пересечения прямой и треугольника """
-    plane_intersection = intersect_line_plane(l1, l2, t1,
-                                              glm.cross(t2 - t1, t3 - t1))
-    if not plane_intersection:
-        return None
-    t1 -= plane_intersection
-    t2 -= plane_intersection
-    t3 -= plane_intersection
-    u = glm.cross(t2, t3)
-    v = glm.cross(t3, t1)
-    w = glm.cross(t1, t2)
-    if glm.dot(u, v) < 0 or glm.dot(u, w) < 0:
-        return None
-    return plane_intersection
+    return glm.dot(point - origin, norm) / den
 
 
-def intersect_line_frustum(l1, l2, frustum_edges):
-    """ Находит точки пересечения прямой и прямоугольников фрустума """
+def ray_plane_intersection(origin: glm.vec3, direction: glm.vec3, point: glm.vec3, norm: glm.vec3) -> glm.vec3:
+    distance = ray_plane_intersection_distance(origin, direction, point, norm)
+    return origin + distance * direction
 
-    tln, trn, bln, brn, tlf, trf, blf, brf = frustum_edges
-    intersections = []
 
-    def intersect(t1, t2, t3):
-        intersection = intersect_line_triangle(l1, l2, t1, t2, t3)
-        if intersection and not any(
-                almost_equal_vec(intersection, prev_int) for prev_int in
-                intersections):
-            intersections.append(intersection)
+def point_to_line_distance(point: glm.vec2, line1: glm.vec2, line2: glm.vec2) -> float:
+    p = line1 - point
+    dir_vec = glm.normalize(line2 - line1)
+    return abs(p.x * dir_vec.y - dir_vec.x * p.y)
 
-    intersect(tln, trn, bln)
-    intersect(bln, trn, brn)
-    intersect(tlf, trf, blf)
-    intersect(blf, trf, brf)
 
-    intersect(tln, tlf, bln)
-    intersect(bln, tlf, blf)
-    intersect(trn, trf, brn)
-    intersect(brn, trf, brf)
+def point_to_point_distance(point1: glm.vec2, point2: glm.vec2) -> float:
+    return glm.distance(point1, point2)
 
-    intersect(tln, tlf, trf)
-    intersect(tln, trf, trn)
-    intersect(bln, blf, brf)
-    intersect(bln, brf, brn)
 
-    return intersections
+def point_to_segment_distance(point: glm.vec2, segment1: glm.vec2, segment2: glm.vec2) -> float:
+    S1S2 = segment2 - segment1
+    S1P = point - segment1
+    S2P = point - segment2
+
+    if glm.dot(S1S2, S2P) > 0:
+        return glm.length(S2P)
+    if glm.dot(S1S2, S1P) < 0:
+        return glm.length(S1P)
+
+    return point_to_line_distance(point, segment1, segment2)
 
 
 def extract_pos(event: QMouseEvent) -> glm.vec2:
@@ -117,3 +95,35 @@ def is_inside_polygon(point: glm.vec2, polygon: list[glm.vec2]) -> bool:
             result = not result
         j = i
     return result
+
+
+def ray_triangle_intersection_distance(origin: glm.vec3, direction: glm.vec3,
+                                       point1: glm.vec3, point2: glm.vec3, point3: glm.vec3) -> float:
+    """https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm"""
+
+    eps = 1e-5
+    edge1 = point2 - point1
+    edge2 = point3 - point1
+    h = glm.cross(direction, edge2)
+    a = glm.dot(edge1, h)
+    if abs(a) < eps:
+        return np.nan
+    f = 1.0 / a
+    s = origin - point1
+    u = f * glm.dot(s, h)
+    if u < 0 or u > 1:
+        return np.nan
+    q = glm.cross(s, edge1)
+    v = f * glm.dot(direction, q)
+    if v < 0 or u + v > 1:
+        return np.nan
+
+    t = f * glm.dot(edge2, q)
+    return t if t > eps else np.nan
+
+
+def ray_triangle_intersection(origin: glm.vec3, direction: glm.vec3,
+                              point1: glm.vec3, point2: glm.vec3, point3: glm.vec3) -> glm.vec3:
+    distance = ray_triangle_intersection_distance(origin, direction, point1, point2, point3)
+    return origin + distance * direction
+

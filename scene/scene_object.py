@@ -56,6 +56,8 @@ class SceneObject(RawSceneObject):
         self.__parents = {}
         self.__children = {}
         self.add_parents(*parents)
+        for parent in parents:
+            parent.add_children(self)
 
     def post_update(self):
         self.on_updated.invoke(self)

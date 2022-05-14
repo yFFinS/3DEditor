@@ -206,9 +206,13 @@ class BasePlane(BaseGeometryObject):
         """Возвращает три различные точки на плоскости"""
         pass
 
-    def get_direction_vectors(self):
+    def get_direction_vectors(self) -> (glm.vec3, glm.vec3):
         """Возвращает направляющие векторы плоскости"""
-        pass
+        raise NotImplementedError
+
+    def get_normal(self) -> glm.vec3:
+        dir1, dir2 = self.get_direction_vectors()
+        return glm.normalize(glm.cross(dir1, dir2))
 
 
 class PlaneBy3Points(BasePlane):
@@ -328,6 +332,9 @@ class Segment(BaseGeometryObject):
         intersect2 = self.get_intersection_with_line(segment.get_line())
         return intersect1
 
+    def get_points(self) -> (glm.vec3, glm.vec3):
+        return self.point1.pos, self.point2.pos
+
 
 class Triangle(BaseGeometryObject):
     __counter = 1
@@ -350,6 +357,9 @@ class Triangle(BaseGeometryObject):
                 "forming objects": [self.point1.id, self.point2.id, self.point3.id]
             }
         }
+
+    def get_points(self) -> (glm.vec3, glm.vec3, glm.vec3):
+        return self.point1.pos, self.point2.pos, self.point3.pos
 
 
 class BaseVolumetricBody(BaseGeometryObject):

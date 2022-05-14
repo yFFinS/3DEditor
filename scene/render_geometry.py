@@ -76,7 +76,7 @@ class SceneLine(SceneObject):
         self.selection_mask = SELECT_LINE
 
         self.mesh = Mesh()
-        self.update_mesh()
+        self.__update_local_positions()
         self.mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)] * 2))
 
     @classmethod
@@ -93,36 +93,43 @@ class SceneLine(SceneObject):
         self = cls(line, scene_point1, scene_point2)
         return self
 
-    def get_render_mat(self, camera: Camera):
-        return camera.proj_view_matrix
-
     def update_hierarchy_position(self, pos: glm.vec3,
                                   ignored: set['SceneObject']):
+        move = pos - self.transform.translation
         self.transform.translation = pos
-        # TODO
 
-    def update_mesh(self):
-        # TODO: Умом
-        dir_v = self.line.get_directional_vector()
-        p1, p2 = self.line.get_pivot_points()
-        self.mesh.set_positions(
-            np.array([p1 + 1000 * dir_v, p2 - 1000 * dir_v]))
+        ignored.add(self)
+        for point in (parent for parent in self.parents if parent not in ignored):
+            point.update_hierarchy_position(point.transform.translation + move, ignored)
 
     def prepare_render(self, camera: Camera):
-        p1, p2 = self.line.get_pivot_points()
-
-        # if almost_equal_vec(p1, p2):
-        #     return
-        #
-        # intersections = intersect_line_frustum(p1, p2, camera.get_frustum_edges())
-        # print(intersections)
-        # if len(intersections) != 2:
-        #     return
-        #
-        # self.update_mesh(*intersections)
-
-        self.update_mesh()
+        dist = glm.distance(self.transform.translation, camera.translation)
+        self.transform.scale = glm.vec3(max(dist / 1.5, 1))
         super(SceneLine, self).prepare_render(camera)
+
+    def __update_local_positions(self):
+        p1, p2 = self.line.get_pivot_points()
+        directional_vec = self.line.get_directional_vector()
+        center = (p1 + p2) / 2
+        self.transform.translation = center
+        additional_distance = 1
+        self.mesh.set_positions(np.array([additional_distance * directional_vec,
+                                          -additional_distance * directional_vec]))
+
+    def on_parent_position_updated(self, parent: 'SceneObject'):
+        self.__update_local_positions()
+
+    def get_selection_weight(self, camera: Camera,
+                             click_pos: glm.vec2) -> float:
+
+        pivots = self.line.get_pivot_points()
+        transformed_pivots = [camera.world_to_screen(point) for point in pivots]
+        distance = point_to_line_distance(click_pos, *transformed_pivots)
+        max_dist = 20
+        factor = 0.8
+        if distance > max_dist:
+            return np.nan
+        return (1 - distance / max_dist) * factor
 
 
 class ScenePlane(SceneObject):
@@ -157,6 +164,18 @@ class ScenePlane(SceneObject):
         self = cls(plane, scene_point1, scene_point2, scene_point3)
         return self
 
+    @classmethod
+    def by_point_and_line(cls, point: ScenePoint, line: SceneLine) -> 'ScenePlane':
+        plane = PlaneBy3Points(point.point, *line.line.get_pivot_points())
+        self = cls(plane, point, line)
+        return self
+
+    @classmethod
+    def by_point_and_segment(cls, point: ScenePoint, segment: 'SceneEdge') -> 'ScenePlane':
+        plane = PlaneBy3Points(point.point, *segment.edge.get_points())
+        self = cls(plane, point, segment)
+        return self
+
     def __update_local_position(self):
         p1, p2, p3 = self.plane.get_pivot_points()
         center = (p1 + p2 + p3) / 3
@@ -167,7 +186,7 @@ class ScenePlane(SceneObject):
     def __get_square_points(self):
         p1, p2, p3 = self.plane.get_pivot_points()
         center = (p1 + p2 + p3) / 3
-        norm = glm.cross(p1 - p2, p1 - p3)
+        norm = self.plane.get_normal()
         op1 = glm.normalize(p1 - center)
         op2 = glm.normalize(glm.cross(norm, op1))
         return [op1, op2, -op1, -op2]
@@ -190,10 +209,20 @@ class ScenePlane(SceneObject):
         square_points = self.__get_square_points()
         model = self.transform.model_matrix
         transformed_points = [model * point for point in square_points]
-        polygon2d = [camera.world_to_screen(point) for point in
-                     transformed_points]
-        inside = is_inside_polygon(click_pos, polygon2d)
-        return 0.4 if inside else np.nan
+        origin = camera.translation
+        direction = camera.screen_to_world(click_pos)
+
+        intersection_distance1 = ray_triangle_intersection_distance(
+            origin, direction, *[glm.vec3(point) for point in transformed_points[:3]])
+        intersection_distance2 = ray_triangle_intersection_distance(
+            origin, direction, *[glm.vec3(point) for point in transformed_points[1:]])
+
+        if glm.isnan(intersection_distance1) and glm.isnan(intersection_distance2):
+            return np.nan
+
+        distance = intersection_distance1 if not glm.isnan(intersection_distance1) else intersection_distance2
+        mapped = glm.atan(distance) / (glm.pi() / 2) * 0.8
+        return 1 - mapped
 
     def on_parent_position_updated(self, parent: 'SceneObject'):
         self.__update_local_position()
@@ -239,21 +268,26 @@ class SceneEdge(SceneObject):
         move = pos - self.transform.translation
         self.transform.translation = pos
 
-        p1, p2 = list(self.parents)
         ignored.add(self)
-        if p1 not in ignored:
-            p1.update_hierarchy_position(p1.transform.translation + move,
-                                         ignored)
-        if p2 not in ignored:
-            p2.update_hierarchy_position(p2.transform.translation + move,
-                                         ignored)
+        for point in (point for point in self.parents if point not in ignored):
+            point.update_hierarchy_position(point.transform.translation + move, ignored)
 
-        for child in self.children:
-            if child not in ignored:
-                child.on_parent_position_updated(self)
+        for child in (child for child in self.children if child not in ignored):
+            child.on_parent_position_updated(self)
 
     def on_parent_position_updated(self, parent: 'SceneObject'):
         self.__update_local_position()
+
+    def get_selection_weight(self, camera: Camera,
+                             click_pos: glm.vec2) -> float:
+        pivots = self.edge.get_points()
+        transformed_pivots = [camera.world_to_screen(point) for point in pivots]
+        distance = point_to_segment_distance(click_pos, *transformed_pivots)
+        max_dist = 20
+        factor = 0.8
+        if distance > max_dist:
+            return np.nan
+        return (1 - distance / max_dist) * factor
 
 
 class SceneFace(SceneObject):
@@ -292,28 +326,28 @@ class SceneFace(SceneObject):
         move = pos - self.transform.translation
         self.transform.translation = pos
 
-        p1, p2, p3 = [parent for parent in self.parents if
-                      isinstance(parent, ScenePoint)]
         ignored.add(self)
-        if p1 not in ignored:
-            p1.update_hierarchy_position(p1.transform.translation + move,
-                                         ignored)
-        if p2 not in ignored:
-            p2.update_hierarchy_position(p2.transform.translation + move,
-                                         ignored)
-        if p3 not in ignored:
-            p3.update_hierarchy_position(p3.transform.translation + move,
-                                         ignored)
+        for point in (parent for parent in self.parents if
+                      isinstance(parent, ScenePoint) and parent not in ignored):
+            point.update_hierarchy_position(point.transform.translation + move,
+                                            ignored)
 
     def on_parent_position_updated(self, parent: 'SceneObject'):
         self.__update_local_position()
 
     def get_selection_weight(self, camera: Camera,
                              click_pos: glm.vec2) -> float:
-        vertices = [self.face.point1, self.face.point2, self.face.point3]
-        polygon2d = [camera.world_to_screen(point.pos) for point in vertices]
-        inside = is_inside_polygon(click_pos, polygon2d)
-        return 0.6 if inside else np.nan
+        origin = camera.translation
+        direction = camera.screen_to_world(click_pos)
+
+        intersection_distance = ray_triangle_intersection_distance(
+            origin, direction, *self.face.get_points())
+
+        if glm.isnan(intersection_distance):
+            return np.nan
+
+        mapped = glm.atan(intersection_distance) / (glm.pi() / 2) * 0.8
+        return 1 - mapped
 
 
 class SceneCoordAxis(RawSceneObject):

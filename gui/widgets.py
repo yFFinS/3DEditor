@@ -1,7 +1,7 @@
 from typing import Iterable
 from weakref import ref
 
-from PyQt5.QtCore import QSize
+from PyQt5.QtCore import QSize, QItemSelection
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QSizePolicy, QPushButton,
                              QListWidget, QAbstractItemView,
@@ -124,65 +124,66 @@ class SceneObjectList(QListWidget):
 
         self.__gl_scene = ref(gl_scene)
         self.__object_to_item = {}
-        self.__accepting_events = True
+        self.__item_to_object = {}
         self.__subscribe_to_scene(self.__gl_scene().get_scene())
 
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.itemSelectionChanged.connect(self.__selection_changed)
+        self.selectionModel().selectionChanged.connect(self.__selection_changed)
 
     def __subscribe_to_scene(self, scene: Scene):
-        scene.on_object_added += self.on_object_added
-        scene.on_object_removed += self.on_object_removed
+        scene.on_objects_added += self.on_objects_added
+        scene.on_objects_removed += self.on_objects_removed
         scene.on_objects_selected += self.on_objects_selected
         scene.on_objects_deselected += self.on_objects_deselected
 
-    def on_object_removed(self, scene_object: SceneObject):
-        self.__accepting_events = False
+    def on_objects_removed(self, scene_objects: Iterable[SceneObject]):
+        self.__begin_update()
+        for scene_object in scene_objects:
+            item = self.__object_to_item.pop(scene_object)
+            self.__item_to_object.pop(item)
+            self.takeItem(self.row(item))
+        self.__end_update()
 
-        item = self.__object_to_item.pop(scene_object)
-        self.removeItemWidget(item)
-        self.takeItem(self.row(item))
-
-        self.__accepting_events = True
-
-    def on_object_added(self, scene_object: SceneObject):
-        # Медленно
-
-        self.__accepting_events = False
-        item = QListWidgetItem()
-        so_widget = SceneObjectWidget(scene_object)
-
-        item.setSizeHint(so_widget.sizeHint())
-        self.addItem(item)
-        self.setItemWidget(item, so_widget)
-        self.__object_to_item[scene_object] = item
-        self.__accepting_events = True
+    def on_objects_added(self, scene_objects: Iterable[SceneObject]):
+        self.__begin_update()
+        for scene_object in scene_objects:
+            item = SceneObjectItem(scene_object)
+            self.addItem(item)
+            self.__object_to_item[scene_object] = item
+            self.__item_to_object[item] = scene_object
+        self.__end_update()
 
     def on_objects_selected(self, scene_objects: Iterable[SceneObject]):
-        self.__accepting_events = False
+        self.__begin_update()
         for obj in scene_objects:
             item = self.__object_to_item[obj]
             item.setSelected(True)
-
-        self.__accepting_events = True
+        self.__end_update()
 
     def on_objects_deselected(self, scene_objects: Iterable[SceneObject]):
-        self.__accepting_events = False
+        self.__begin_update()
         for obj in scene_objects:
             item = self.__object_to_item[obj]
             item.setSelected(False)
+        self.__end_update()
 
-        self.__accepting_events = True
+    def __begin_update(self):
+        self.setUpdatesEnabled(False)
+        self.blockSignals(True)
 
-    def __selection_changed(self):
-        if not self.__accepting_events:
-            return
-        for i in range(self.count()):
-            item = self.item(i)
-            widget = self.itemWidget(item)
-            if widget is not None:
-                obj = widget.get_object()
-                self.__set_object_selected(obj, item.isSelected())
+    def __end_update(self):
+        self.setUpdatesEnabled(True)
+        self.blockSignals(False)
+        self.update()
+
+    def __selection_changed(self, selected: QItemSelection, deselected: QItemSelection):
+        for value, selection in [(True, selected), (False, deselected)]:
+            for sel_range in selection:
+                for index in sel_range.indexes():
+                    row = index.row()
+                    item = self.item(row)
+                    obj = self.__item_to_object[item]
+                    self.__set_object_selected(obj, value)
 
         self.__gl_scene().redraw()
 
@@ -194,33 +195,23 @@ class SceneObjectList(QListWidget):
             scene.deselect(scene_object)
 
 
-class SceneObjectWidget(QWidget):
+class SceneObjectItem(QListWidgetItem):
     def __init__(self, scene_object: SceneObject):
-        super(SceneObjectWidget, self).__init__()
+        super(SceneObjectItem, self).__init__()
 
         scene_object.on_updated += self.__object_updated
+
         self.__scene_object = scene_object
 
-        self.__layout = QHBoxLayout()
-
         font = QFont("Arial", 10)
-        self.__name_label = QLabel()
-
-        self.__name_label.setFont(font)
-        self.__name_label.setText(scene_object.name)
-
-        self.__layout.addWidget(self.__name_label)
-        self.__layout.setContentsMargins(5, 2, 5, 2)
-        self.setFixedHeight(26)
-
-        self.__layout.addStretch()
-        self.setLayout(self.__layout)
+        self.setText(scene_object.name)
+        self.setFont(font)
 
     def __object_updated(self, obj):
-        self.__name_label.setText(self.__scene_object.name)
+        self.setText(obj.name)
 
     def get_object(self):
         return self.__scene_object
 
-    def sizeHint(self):
-        return self.__layout.sizeHint()
+    def __hash__(self):
+        return hash(self.__scene_object)

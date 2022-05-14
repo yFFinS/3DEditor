@@ -1,11 +1,11 @@
-from typing import Callable
+import os.path
 
 from PyQt5.QtCore import QObject
-from PyQt5.QtGui import QWindow, QOpenGLContext, QSurfaceFormat
 from PyQt5.QtOpenGL import QGLWidget, QGLFormat
 from PyQt5.QtWidgets import QMainWindow, QWidget, QSplitter, QHBoxLayout, \
     QSizePolicy, QVBoxLayout, QLineEdit, QLabel, QShortcut
 
+from profiling.profiler import profile
 from core.event_dispatcher import *
 from gui.interfaces import GLSceneInterface, SceneExplorerInterface
 from gui.widgets import SceneActions, SceneObjectList
@@ -127,10 +127,13 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
         GL.glPolygonOffset(1, 1)
 
-        self.__shaders = [ShaderProgram("shaders/default.vert", "shaders/default.frag"),
-                          ShaderProgram("shaders/point_inst.vert", "shaders/default.frag"),
-                          ShaderProgram("shaders/line.vert", "shaders/default.frag"),
-                          ShaderProgram("shaders/triangle.vert", "shaders/default.frag")]
+        def get_shader_path(shader):
+            return os.path.join("shaders", shader)
+
+        self.__shaders = [ShaderProgram(get_shader_path("default.vert"), get_shader_path("default.frag")),
+                          ShaderProgram(get_shader_path("point_inst.vert"), get_shader_path("default.frag")),
+                          ShaderProgram(get_shader_path("line.vert"), get_shader_path("default.frag")),
+                          ShaderProgram(get_shader_path("triangle.vert"), get_shader_path("default.frag"))]
 
         RawSceneObject.SHADER_PROGRAM = self.__shaders[0]
         ScenePoint.SHADER_PROGRAM = self.__shaders[1]
@@ -162,6 +165,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         self.__scene.camera.width = w
         self.__scene.camera.height = h
 
+    @profile
     def paintGL(self):
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
         self.__scene.render()
@@ -173,9 +177,10 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
             return self.try_select_scene_object(event)
         return False
 
+    @profile
     def __delete_selected_objects(self):
-        for obj in filter(lambda o: o.selected, list(self.__scene.objects)):
-            self.__scene.remove_object(obj)
+        selected = [obj for obj in self.__scene.objects if obj.selected]
+        self.__scene.remove_objects(selected)
 
         self.redraw()
 
@@ -225,7 +230,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
 
     @__action
     def create_rect(self):
-        self.__create_builder(CubeBuilder)
+        self.__create_builder(RectBuilder)
 
     def __create_builder(self, builder_type):
         self.__geometry_builder = builder_type(self.__scene)
@@ -236,16 +241,17 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         self.__geometry_builder.on_builder_canceled += self.__on_builder_canceled
 
     def __on_builder_ready(self):
-        self.__geometry_builder = None
-        self.__last_action(self)
+        pass
 
     def __on_builder_canceled(self):
-        self.__on_builder_ready()
+        self.__geometry_builder = None
+        self.__last_action(self)
 
     def handle_move_object(self, event):
         # TODO:
         pass
 
+    @profile
     def try_select_scene_object(self, event: QMouseEvent):
         x, y = event.x(), event.y()
         to_select = self.__scene.find_selectable(glm.vec2(x, y))
@@ -259,6 +265,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
 
         self.update()
 
+    @profile
     def __deselect_all(self):
         selected_objs = list(self.__scene.objects)
         self.__scene.deselect(selected_objs)
