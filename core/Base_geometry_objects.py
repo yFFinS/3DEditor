@@ -282,6 +282,52 @@ class PlaneByPointAndPlane(BasePlane):
         return self.plane.get_direction_vectors()
 
 
+class PlaneByPointAndLine(BasePlane):
+    def __init__(self, point, line, name=None, id=None):
+        super(PlaneByPointAndLine, self).__init__(name, id)
+        self.point = point
+        self.line = line
+
+    def get_serializing_dict(self):
+        return {self.id:
+            {
+                "type": self.type,
+                "name": self.name,
+                "forming objects": [self.point.id, self.line.id]
+            }
+        }
+
+    def get_pivot_points(self):
+        return self.point.pos, *self.line.get_pivot_points()
+
+    def get_direction_vectors(self):
+        pivots = self.get_pivot_points()
+        return pivots[1] - pivots[0], pivots[2] - pivots[0]
+
+
+class PlaneByPointAndSegment(BasePlane):
+    def __init__(self, point, segment, name=None, id=None):
+        super(PlaneByPointAndSegment, self).__init__(name, id)
+        self.point = point
+        self.segment = segment
+
+    def get_serializing_dict(self):
+        return {self.id:
+            {
+                "type": self.type,
+                "name": self.name,
+                "forming objects": [self.point.id, self.segment.id]
+            }
+        }
+
+    def get_pivot_points(self):
+        return self.point.pos, self.segment.point1.pos, self.segment.point2.pos
+
+    def get_direction_vectors(self):
+        pivots = self.get_pivot_points()
+        return pivots[1] - pivots[0], pivots[2] - pivots[0]
+
+
 class Segment(BaseGeometryObject):
     __counter = 1
 

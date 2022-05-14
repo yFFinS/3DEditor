@@ -165,15 +165,15 @@ class ScenePlane(SceneObject):
         return self
 
     @classmethod
-    def by_point_and_line(cls, point: ScenePoint, line: SceneLine) -> 'ScenePlane':
-        plane = PlaneBy3Points(point.point, *line.line.get_pivot_points())
-        self = cls(plane, point, line)
+    def by_point_and_line(cls, scene_point: ScenePoint, scene_line: SceneLine) -> 'ScenePlane':
+        plane = PlaneByPointAndLine(scene_point.point, scene_line.line)
+        self = cls(plane, scene_point, scene_line)
         return self
 
     @classmethod
-    def by_point_and_segment(cls, point: ScenePoint, segment: 'SceneEdge') -> 'ScenePlane':
-        plane = PlaneBy3Points(point.point, *segment.edge.get_points())
-        self = cls(plane, point, segment)
+    def by_point_and_segment(cls, scene_point: ScenePoint, scene_segment: 'SceneEdge') -> 'ScenePlane':
+        plane = PlaneByPointAndSegment(scene_point.point, scene_segment.edge)
+        self = cls(plane, scene_point, scene_segment)
         return self
 
     def __update_local_position(self):

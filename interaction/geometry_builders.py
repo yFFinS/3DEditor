@@ -172,6 +172,14 @@ class PlaneBuilder(BaseBuilder):
                 if self.plane is not None:
                     self._scene().deselect(self.plane)
                 self.plane = snap
+            elif isinstance(snap, SceneLine):
+                if self.line is not None:
+                    self._scene().deselect(self.line)
+                self.line = snap
+            elif isinstance(snap, SceneEdge):
+                if self.segment is not None:
+                    self._scene().deselect(self.segment)
+                self.segment = snap
             else:
                 self.points.append(snap)
             self._scene().select(snap)

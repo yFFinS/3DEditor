@@ -84,6 +84,7 @@ class Scene:
             return
 
         layers, transparent = self.__group_by_render_layer(self.all_objects)
+        
         for layer in layers:
             others, points, lines, triangles \
                 = self.__group_objects_by_render_params(layer)
@@ -107,11 +108,8 @@ class Scene:
                     self.__render_single(point)
             GL.glDepthMask(GL.GL_TRUE)
 
-        GL.glDisable(GL.GL_DEPTH_TEST)
         for tr in transparent:
             self.__render_single(tr)
-
-        GL.glEnable(GL.GL_DEPTH_TEST)
 
     @staticmethod
     @profile
