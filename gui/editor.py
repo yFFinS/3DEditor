@@ -271,7 +271,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         self.__scene.deselect(selected_objs)
 
 
-class SceneExplorer(QWidget, SceneExplorerInterface):
+class SceneExplorer(QWidget):
     def __init__(self, gl_scene: GLSceneInterface):
         super(SceneExplorer, self).__init__()
 
@@ -294,20 +294,6 @@ class SceneExplorer(QWidget, SceneExplorerInterface):
         self.setMinimumSize(300, 200)
         self.resize(300, 200)
         self.setMaximumWidth(700)
-
-    def add_scene_object(self, scene_object: SceneObject):
-        self.__list.add_object(scene_object)
-
-    def clear_selection(self):
-        self.__list.__deselect_all()
-
-    def select_scene_object(self, scene_object, deselect_others=False):
-        if deselect_others:
-            self.__list.__deselect_all()
-        self.set_scene_object_selected(scene_object, True)
-
-    def deselect_scene_object(self, scene_object: SceneObject):
-        self.set_scene_object_selected(scene_object, False)
 
     def set_scene_object_selected(self, scene_object: SceneObject, value: bool):
         self.__list.__set_object_selected(scene_object, value)
