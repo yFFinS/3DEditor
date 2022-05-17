@@ -1,113 +1,94 @@
 from core.Base_geometry_objects import *
 
 
-def generate_object_by_deserialized_data(id, data, all_objects_data, generated_objects):
+def generate_object_by_deserialized_data(obj_id, data, generated_objects):
     """Генерирует объект по декодированному словарю json"""
 
-    if id in generated_objects:
-        return generated_objects[id]
+    def get_from_id(req_id):
+        generate_object_by_deserialized_data(req_id, data, generated_objects)
+        return generated_objects[req_id]
 
-    if data["type"] == "point":
-        res = Point(name=data["name"],
-                    id=id,
-                    x=data["forming objects"][0],
-                    y=data["forming objects"][1],
-                    z=data["forming objects"][1])
-        generated_objects[id] = res
-        return res
-    elif data["type"] == "line":
-        if data["forming objects"][1].type == "line":
-            res = LineByPointAndLine(id=id,
-                                     name=data["name"],
-                                     point=generate_object_by_deserialized_data(data["forming objects"][0],
-                                                                                all_objects_data[
-                                                                                    data["forming objects"][0]],
-                                                                                all_objects_data,
-                                                                                generated_objects),
-                                     line=generate_object_by_deserialized_data(data["forming objects"][1],
-                                                                               all_objects_data[
-                                                                                   data["forming objects"][1]],
-                                                                               all_objects_data,
-                                                                               generated_objects)
+    if obj_id in generated_objects:
+        return
+
+    res = None
+
+    obj_data = data[obj_id]
+    obj_type = obj_data["type"]
+    forming_objects = obj_data["forming objects"]
+    obj_name = obj_data["name"]
+
+    if obj_type == "point":
+        pos = glm.vec3(forming_objects[0], forming_objects[1], forming_objects[2])
+        res = Point(pos=pos, name=obj_name, id=obj_id)
+        generated_objects[obj_id] = res
+        return
+
+    forming_objects = [get_from_id(req_id) for req_id in forming_objects]
+
+    if obj_type == "line":
+        f1, f2 = forming_objects
+        if f2.type == "line":
+            res = LineByPointAndLine(id=obj_id,
+                                     name=obj_name,
+                                     point=f1,
+                                     line=f2
                                      )
-            generated_objects[id] = res
-            return res
         else:
-            res = LineBy2Points(id=id,
-                                name=data["name"],
-                                point1=generate_object_by_deserialized_data(data["forming objects"][0],
-                                                                            all_objects_data[
-                                                                                data["forming objects"][0]],
-                                                                            all_objects_data,
-                                                                            generated_objects),
-                                point2=generate_object_by_deserialized_data(data["forming objects"][1],
-                                                                            all_objects_data[
-                                                                                data["forming objects"][1]],
-                                                                            all_objects_data,
-                                                                            generated_objects)
+            res = LineBy2Points(id=obj_id,
+                                name=obj_name,
+                                point1=f1,
+                                point2=f2
                                 )
-            generated_objects[id] = res
-            return res
-    elif data["type"] == "plane":
-        if data["forming objects"][1].type == "plane":
-            res = PlaneByPointAndPlane(id=id,
-                                       name=data["name"],
-                                       point=generate_object_by_deserialized_data(data["forming objects"][0],
-                                                                                  all_objects_data[
-                                                                                      data["forming objects"][0]],
-                                                                                  all_objects_data,
-                                                                                  generated_objects),
-                                       plane=generate_object_by_deserialized_data(data["forming objects"][1],
-                                                                                  all_objects_data[
-                                                                                      data["forming objects"][1]],
-                                                                                  all_objects_data,
-                                                                                  generated_objects)
+    elif obj_type == "plane":
+        f1, f2, *_ = forming_objects
+        if f2.type == "plane":
+            res = PlaneByPointAndPlane(id=obj_id,
+                                       name=obj_name,
+                                       point=f1,
+                                       plane=f2
                                        )
-            generated_objects[id] = res
-            return res
+        elif f2.type == "line":
+            res = PlaneByPointAndLine(id=obj_id,
+                                      name=obj_name,
+                                      point=f1,
+                                      line=f2
+                                      )
+        elif f2.type == "segment":
+            res = PlaneByPointAndSegment(id=obj_id,
+                                         name=obj_name,
+                                         point=f1,
+                                         segment=f2
+                                         )
         else:
-            res = PlaneBy3Points(id=id,
-                                 name=data["name"],
-                                 point1=generate_object_by_deserialized_data(data["forming objects"][0],
-                                                                             all_objects_data[
-                                                                                 data["forming objects"][0]],
-                                                                             all_objects_data,
-                                                                             generated_objects),
-                                 point2=generate_object_by_deserialized_data(data["forming objects"][1],
-                                                                             all_objects_data[
-                                                                                 data["forming objects"][1]],
-                                                                             all_objects_data,
-                                                                             generated_objects),
-                                 point3=generate_object_by_deserialized_data(data["forming objects"][2],
-                                                                             all_objects_data[
-                                                                                 data["forming objects"][2]],
-                                                                             all_objects_data,
-                                                                             generated_objects)
+            res = PlaneBy3Points(id=obj_id,
+                                 name=obj_name,
+                                 point1=f1,
+                                 point2=f2,
+                                 point3=forming_objects[2]
                                  )
-            generated_objects[id] = res
-            return res
-    elif data["type"] == "segment":
-        res = Segment(id=id,
-                      name=data["name"],
-                      point1=generate_object_by_deserialized_data(data["forming objects"][0],
-                                                                  all_objects_data[data["forming objects"][0]],
-                                                                  all_objects_data),
-                      point2=generate_object_by_deserialized_data(data["forming objects"][0],
-                                                                  all_objects_data[data["forming objects"][0]],
-                                                                  all_objects_data)
+    elif obj_type == "segment":
+        res = Segment(id=obj_id,
+                      name=obj_name,
+                      point1=forming_objects[0],
+                      point2=forming_objects[1]
                       )
-        generated_objects[id] = res
-        return res
-    elif data["type"] == "base_3d_object":
-        res = BaseVolumetricBody(id=id,
-                                 name=data["name"],
-                                 points=[generate_object_by_deserialized_data(data["forming objects"][i],
-                                                                              all_objects_data[
-                                                                                  data["forming objects"][i]],
-                                                                              all_objects_data)
-                                         for i in range(len(data["forming objects"]))]
+    elif obj_type == "triangle":
+        res = Triangle(id=obj_id,
+                       name=obj_name,
+                       point1=forming_objects[0],
+                       point2=forming_objects[1],
+                       point3=forming_objects[2],
+                       )
+    elif obj_type == "base_3d_object":
+        res = BaseVolumetricBody(id=obj_id,
+                                 name=obj_name,
+                                 points=forming_objects
                                  )
-        generated_objects[id] = res
-        return res
     else:
-        raise Exception("Unexpected object type")
+        print(f"Unknown object type {obj_type}")
+
+    if res is None:
+        print(f"Unknown object type {obj_type}")
+    else:
+        generated_objects[obj_id] = res

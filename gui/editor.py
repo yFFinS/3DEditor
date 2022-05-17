@@ -1,9 +1,10 @@
 import os.path
 
 from PyQt5.QtCore import QObject
+from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtOpenGL import QGLWidget, QGLFormat
 from PyQt5.QtWidgets import QMainWindow, QWidget, QSplitter, QHBoxLayout, \
-    QSizePolicy, QVBoxLayout, QLineEdit, QLabel, QShortcut
+    QSizePolicy, QVBoxLayout, QLineEdit, QLabel, QShortcut, QFileDialog, QAction, QDialog, QInputDialog, QErrorMessage
 
 from profiling.profiler import profile
 from core.event_dispatcher import *
@@ -16,6 +17,7 @@ from scene.camera import Camera
 from scene.render_geometry import SceneGrid, SceneCoordAxis
 from scene.scene import Scene
 from scene.scene_object import SceneObject
+from serialization import serialize
 
 
 class Window(QMainWindow):
@@ -23,14 +25,64 @@ class Window(QMainWindow):
         super(Window, self).__init__()
         self.__editor = EditorGUI()
 
+        self.__file_selection_dialog = QFileDialog()
+        self.__error_message = QErrorMessage()
+
+        self.__opened_scene_name = None
+
         menuBar = self.menuBar()
         fileMenu = menuBar.addMenu('Файл')
+
+        self.__save_scene_action = QAction()
+        self.__save_scene_action.setText("Сохранить сцену")
+        self.__save_scene_action.setShortcut("Ctrl+S")
+        self.__save_scene_action.triggered.connect(self.__on_save_scene)
+        # TODO: добавить проверку изменений сцены self.__save_scene_action.setEnabled(False)
+
+        fileMenu.addAction(self.__save_scene_action)
+        fileMenu.addAction('Открыть сцену', self.__on_load_scene, "Ctrl+O")
+        fileMenu.addAction('Новая сцена', self.__on_new_scene, "Ctrl+N")
 
         self.setCentralWidget(self.__editor)
         self.setWindowTitle('3D Editor')
 
-    def closeEvent(self, a0):
-        self.__editor.closeEvent(a0)
+    def __on_new_scene(self):
+        self.__editor.new_scene()
+
+    def __on_load_scene(self):
+        dialog = self.__file_selection_dialog
+        dialog.setAcceptMode(QFileDialog.AcceptOpen)
+        dialog.setFileMode(QFileDialog.ExistingFile)
+
+        load_file = dialog.getOpenFileName(self, "Загрузка сцены")
+        file = load_file[0]
+        if not file:
+            return
+
+        err_message = self.__editor.load_scene(file)
+        if err_message:
+            self.__error_message.setWindowTitle("Ошибка загрузки сцены")
+            self.__error_message.showMessage(err_message)
+        else:
+            self.__save_scene_action.setEnabled(True)
+
+    def __on_save_scene(self):
+        dialog = self.__file_selection_dialog
+        dialog.setAcceptMode(QFileDialog.AcceptSave)
+        dialog.setFileMode(QFileDialog.AnyFile)
+
+        save_file = dialog.getSaveFileName(self, "Сохранение сцены", self.__opened_scene_name)
+        file = save_file[0]
+        if not file:
+            return
+
+        err_message = self.__editor.save_scene(save_file[0])
+        if err_message:
+            self.__error_message.setWindowTitle("Ошибка сохранения сцены")
+            self.__error_message.showMessage(err_message)
+
+    def closeEvent(self, event: QCloseEvent):
+        self.__editor.on_quit(event)
 
 
 class EditorGUI(QWidget):
@@ -60,12 +112,32 @@ class EditorGUI(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-    def closeEvent(self, event):
+    def new_scene(self):
+        self.__gl_widget.set_scene(None, None)
+
+    def save_scene(self, file_name: str) -> str:
+        try:
+            serialize.serialize_scene(self.__gl_widget.get_scene(), file_name)
+            return ''
+        except Exception as e:
+            return str(e)
+
+    def load_scene(self, file_name: str) -> str:
+        try:
+            camera_settings, objects = serialize.deserialize_scene(file_name)
+            self.__gl_widget.set_scene(camera_settings, objects.values())
+            return ''
+        except Exception as e:
+            return str(e)
+
+    def on_quit(self, event: QCloseEvent):
         self.__gl_widget.unload()
+        event.setAccepted(True)
 
 
 class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
     def __init__(self):
+
         sur_format = QGLFormat()
         sur_format.setSamples(4)
         sur_format.setProfile(QGLFormat.CoreProfile)
@@ -73,7 +145,9 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         # noinspection PyTypeChecker
         super(QGLWidget, self).__init__(sur_format)
 
-        self.__scene = Scene()
+        self.on_scene_changed = Event()
+
+        self.__scene = None
         self.__camera_controller = None
         self.__geometry_builder = None
         self.__last_action = None
@@ -88,9 +162,47 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         self.installEventFilter(self)
 
         self.__delete_sc = QShortcut("Del", self)
-        self.__delete_sc.activated.connect(self.__delete_selected_objects)
+        self.__delete_sc.activated.connect(self.__on_delete)
         self.__cancel_sc = QShortcut("Esc", self)
         self.__cancel_sc.activated.connect(self.__cancel)
+
+    def set_scene(self, camera_settings=None, objects=None):
+        camera = Camera(self.width(), self.height())
+        if camera_settings is not None:
+            serialize.inject_camera_settings(camera, camera_settings)
+
+        scene = Scene()
+        prev_scene = self.__scene
+        self.on_scene_changed.invoke(prev_scene, scene)
+
+        scene.camera = camera
+        controller = CameraController(camera)
+        scene.add_object(SceneGrid())
+        scene.add_object(SceneCoordAxis())
+
+        if objects is not None:
+            scene.add_objects(list(self.__convert_objects(objects)))
+
+        self.__scene = scene
+        self.__camera_controller = controller
+
+        self.redraw()
+
+    @staticmethod
+    def __convert_objects(objects):
+        for obj in objects:
+            if isinstance(obj, Point):
+                yield ScenePoint(obj)
+            elif isinstance(obj, BaseLine):
+                yield SceneLine(obj)
+            elif isinstance(obj, BasePlane):
+                yield ScenePlane(obj)
+            elif isinstance(obj, Segment):
+                yield SceneEdge(obj)
+            elif isinstance(obj, Triangle):
+                yield SceneFace(obj)
+            else:
+                print(f"Unknown object {obj}")
 
     @staticmethod
     def __action(func):
@@ -144,11 +256,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         ScenePlane.SHADER_PROGRAM = self.__shaders[3]
         SceneFace.SHADER_PROGRAM = self.__shaders[3]
 
-        self.__scene.camera = Camera(self.width(), self.height())
-        self.__camera_controller = CameraController(self.__scene.camera)
-
-        self.__scene.add_object(SceneGrid())
-        self.__scene.add_object(SceneCoordAxis())
+        self.set_scene(None, None)
 
         self.__initialized = True
 
@@ -162,13 +270,21 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         if w <= 0 or h <= 0:
             return
         GL.glViewport(0, 0, w, h)
-        self.__scene.camera.width = w
-        self.__scene.camera.height = h
+
+        scene = self.get_scene()
+        if scene is None:
+            return
+
+        scene.camera.width = w
+        scene.camera.height = h
 
     @profile
     def paintGL(self):
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
-        self.__scene.render()
+
+        scene = self.get_scene()
+        if scene is not None:
+            scene.render()
 
     def on_mouse_pressed(self, event: QMouseEvent):
         if self.__geometry_builder is not None:
@@ -177,8 +293,12 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
             return self.try_select_scene_object(event)
         return False
 
-    @profile
-    def __delete_selected_objects(self):
+    def __on_delete(self):
+        builder = self.__geometry_builder
+        if builder is not None and builder.has_any_progress:
+            builder.cancel()
+            return
+
         selected = [obj for obj in self.__scene.objects if obj.selected]
         self.__scene.remove_objects(selected)
 
@@ -317,8 +437,8 @@ class SceneObjectProperties(QWidget):
     def __init__(self, gl_scene: GLSceneInterface):
         super(SceneObjectProperties, self).__init__()
 
+        gl_scene.on_scene_changed += self.__on_scene_changed
         self.__gl_scene = ref(gl_scene)
-        self.__subscribe_to_scene()
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -373,10 +493,14 @@ class SceneObjectProperties(QWidget):
 
         self.__clear_and_disable_edit()
 
-    def __subscribe_to_scene(self):
-        scene = self.__gl_scene().get_scene()
-        scene.on_objects_selected += self.__on_objects_selected
-        scene.on_objects_deselected += self.__on_objects_deselected
+    def __on_scene_changed(self, prev_scene, new_scene):
+        self.__clear_and_disable_edit()
+        if prev_scene is not None:
+            prev_scene.on_objects_selected -= self.__on_objects_selected
+            prev_scene.on_objects_deselected -= self.__on_objects_deselected
+        if new_scene is not None:
+            new_scene.on_objects_selected += self.__on_objects_selected
+            new_scene.on_objects_deselected += self.__on_objects_deselected
 
     def __on_objects_selected(self, scene_objects):
         self.__selected_objects.extend(scene_objects)
