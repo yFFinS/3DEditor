@@ -1,15 +1,15 @@
 from typing import Iterable
 from weakref import ref
 
+import numpy as np
 from PyQt5.QtCore import QSize, QItemSelection
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QSizePolicy, QPushButton,
                              QListWidget, QAbstractItemView,
-                             QListWidgetItem, QLabel)
+                             QListWidgetItem)
 
 from gui.interfaces import SceneActionsInterface, GLSceneInterface
-from scene.render_geometry import ScenePoint, SceneLine, ScenePlane
-from scene.scene import Scene
+from scene.render_geometry import ScenePoint, SceneEdge
 from scene.scene_object import SceneObject
 
 
@@ -66,16 +66,44 @@ class SceneActions(QWidget, SceneActionsInterface):
     def action_stress_test(self):
         scene = self.__gl_scene().get_scene()
 
-        from core.Base_geometry_objects import Point
+        from core.Base_geometry_objects import Point, Segment
         import glm
         import random
 
         offset = glm.vec3(random.random(), random.random(), random.random())
-        start = random.random() * 100
-        for i in range(1000):
-            angle = i + start
-            pos = glm.vec3(glm.sin(angle), glm.cos(angle), glm.cos(angle) * glm.sin(angle))
-            scene.add_object(ScenePoint(Point(pos + offset)))
+        offset = glm.normalize(offset)
+        offset *= random.randint(1, 25)
+
+        def set1(angle):
+            return glm.vec3(glm.sin(angle * 5), glm.tan(angle), (glm.sin(angle) + glm.cos(angle)) ** 3)
+
+        def set2(angle):
+            return glm.vec3(glm.cos(angle), glm.atan(angle), glm.sin(angle) * glm.cos(angle))
+
+        def set3(angle):
+            return glm.vec3(glm.cos(angle / 2) * glm.tanh(angle), glm.cos(angle), glm.sin(angle) ** 3)
+
+        def set4(angle):
+            return glm.vec3(glm.tanh(angle) ** 2, glm.sin(glm.cot(angle)), glm.cos(angle) + glm.atanh(angle * 2))
+
+        func = random.choice([set1, set2, set3, set4])
+        size = random.randint(1, 10)
+
+        prev = None
+
+        for i in range(500):
+            angle = i / glm.pi() * 2
+            pos = func(angle) * size
+            if np.isnan(pos.x) or np.isnan(pos.y) or np.isnan(pos.z):
+                continue
+
+            point = Point(pos + offset)
+            scene.add_object(ScenePoint(point))
+            if prev is not None:
+                segment = Segment(prev, point)
+                edge = SceneEdge(segment)
+                scene.add_object(edge)
+            prev = point
 
         self.__gl_scene().redraw()
 
@@ -122,19 +150,27 @@ class SceneObjectList(QListWidget):
     def __init__(self, gl_scene: GLSceneInterface):
         super(QListWidget, self).__init__()
 
+        gl_scene.on_scene_changed += self.__on_scene_changed
+
         self.__gl_scene = ref(gl_scene)
         self.__object_to_item = {}
         self.__item_to_object = {}
-        self.__subscribe_to_scene(self.__gl_scene().get_scene())
 
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.selectionModel().selectionChanged.connect(self.__selection_changed)
 
-    def __subscribe_to_scene(self, scene: Scene):
-        scene.on_objects_added += self.on_objects_added
-        scene.on_objects_removed += self.on_objects_removed
-        scene.on_objects_selected += self.on_objects_selected
-        scene.on_objects_deselected += self.on_objects_deselected
+    def __on_scene_changed(self, previous_scene, new_scene):
+        self.clear()
+        if previous_scene is not None:
+            previous_scene.on_objects_added -= self.on_objects_added
+            previous_scene.on_objects_removed -= self.on_objects_removed
+            previous_scene.on_objects_selected -= self.on_objects_selected
+            previous_scene.on_objects_deselected -= self.on_objects_deselected
+        if new_scene is not None:
+            new_scene.on_objects_added += self.on_objects_added
+            new_scene.on_objects_removed += self.on_objects_removed
+            new_scene.on_objects_selected += self.on_objects_selected
+            new_scene.on_objects_deselected += self.on_objects_deselected
 
     def on_objects_removed(self, scene_objects: Iterable[SceneObject]):
         self.__begin_update()
@@ -177,6 +213,11 @@ class SceneObjectList(QListWidget):
         self.update()
 
     def __selection_changed(self, selected: QItemSelection, deselected: QItemSelection):
+        scene = self.__gl_scene().get_scene()
+
+        scene.on_objects_selected -= self.on_objects_selected
+        scene.on_objects_deselected -= self.on_objects_deselected
+
         for value, selection in [(True, selected), (False, deselected)]:
             for sel_range in selection:
                 for index in sel_range.indexes():
@@ -185,6 +226,8 @@ class SceneObjectList(QListWidget):
                     obj = self.__item_to_object[item]
                     self.__set_object_selected(obj, value)
 
+        scene.on_objects_selected += self.on_objects_selected
+        scene.on_objects_deselected += self.on_objects_deselected
         self.__gl_scene().redraw()
 
     def __set_object_selected(self, scene_object: SceneObject, value: bool):

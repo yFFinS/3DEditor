@@ -19,18 +19,6 @@ class BaseGeometryObject:
     def type(self):
         return self.__type
 
-    def get_dist_to_point(self, point):
-        """Возвращает дистанцию до точки"""
-        pass
-
-    def get_dist_to_line(self, line):
-        """Возвращает дистанцию до прямой"""
-        pass
-
-    def get_dist_to_plane(self, plane):
-        """Возвращает дистанцию до плоскости"""
-        pass
-
     def get_serializing_dict(self):
         pass
 
@@ -42,8 +30,8 @@ class Point(BaseGeometryObject):
         if name is None:
             name = f'Point{Point.__counter}'
             Point.__counter += 1
-        self.__type = "point"
-        super(Point, self).__init__(self.__type, name, id)
+
+        super(Point, self).__init__("point", name, id)
         self.pos = pos
 
     @property
@@ -59,22 +47,14 @@ class Point(BaseGeometryObject):
         return self.pos.z
 
     def get_serializing_dict(self):
-        return {self.id:
+        return {
+            self.id:
             {
                 "type": self.type,
                 "name": self.name,
                 "forming objects": [self.x, self.y, self.z]
             }
         }
-
-    def get_dist_to_point(self, point):
-        pass
-
-    def get_dist_to_line(self, line):
-        pass
-
-    def get_dist_to_plane(self, plane):
-        pass
 
 
 class BaseLine(BaseGeometryObject):
@@ -121,22 +101,14 @@ class LineBy2Points(BaseLine):
         self.point2 = point2
 
     def get_serializing_dict(self):
-        return {self.id:
+        return {
+            self.id:
             {
                 "type": self.type,
                 "name": self.name,
                 "forming objects": [self.point1.id, self.point2.id]
             }
         }
-
-    def get_dist_to_point(self, point):
-        pass
-
-    def get_dist_to_line(self, line):
-        pass
-
-    def get_dist_to_plane(self, plane):
-        pass
 
     def get_pivot_points(self):
         return self.point1.pos, self.point2.pos
@@ -146,28 +118,20 @@ class LineBy2Points(BaseLine):
 
 
 class LineByPointAndLine(BaseLine):
-    def __init__(self, point, line, name=None):
-        super(LineByPointAndLine, self).__init__(name)
+    def __init__(self, point, line, name=None, id=None):
+        super(LineByPointAndLine, self).__init__(name, id)
         self.point = point
         self.line = line
 
     def get_serializing_dict(self):
-        return {self.id:
+        return {
+            self.id:
             {
                 "type": self.type,
                 "name": self.name,
                 "forming objects": [self.point.id, self.line.id]
             }
         }
-
-    def get_dist_to_point(self, point):
-        pass
-
-    def get_dist_to_line(self, line):
-        pass
-
-    def get_dist_to_plane(self, plane):
-        pass
 
     def get_pivot_points(self):
         return self.point.xyz, self.point.xyz + self.line.get_direction_vector()
@@ -199,12 +163,11 @@ class BasePlane(BaseGeometryObject):
         norm1 = glm.normalize(glm.cross(pivots1[0] - pivots1[1], pivots1[0] - pivots1[2]))
         norm2 = glm.normalize(glm.cross(pivots2[0] - pivots2[1], pivots2[0] - pivots2[2]))
         dot = glm.dot(norm1, norm2)
-        print(dot)
         return abs(abs(dot) - 1) < 1e-9
 
     def get_pivot_points(self):
         """Возвращает три различные точки на плоскости"""
-        pass
+        raise NotImplementedError
 
     def get_direction_vectors(self) -> (glm.vec3, glm.vec3):
         """Возвращает направляющие векторы плоскости"""
@@ -223,7 +186,8 @@ class PlaneBy3Points(BasePlane):
         self.point3 = point3
 
     def get_serializing_dict(self):
-        return {self.id:
+        return {
+            self.id:
             {
                 "type": self.type,
                 "name": self.name,
@@ -231,15 +195,6 @@ class PlaneBy3Points(BasePlane):
                                     self.point3.id]
             }
         }
-
-    def get_dist_to_point(self, point):
-        pass
-
-    def get_dist_to_line(self, line):
-        pass
-
-    def get_dist_to_plane(self, plane):
-        pass
 
     def get_pivot_points(self):
         return self.point1.pos, self.point2.pos, self.point3.pos
@@ -256,22 +211,14 @@ class PlaneByPointAndPlane(BasePlane):
         self.plane = plane
 
     def get_serializing_dict(self):
-        return {self.id:
+        return {
+            self.id:
             {
                 "type": self.type,
                 "name": self.name,
                 "forming objects": [self.point.id, self.plane.id]
             }
         }
-
-    def get_dist_to_point(self, point):
-        pass
-
-    def get_dist_to_line(self, line):
-        pass
-
-    def get_dist_to_plane(self, plane):
-        pass
 
     def get_pivot_points(self):
         dir_vectors = self.get_direction_vectors()
@@ -289,7 +236,8 @@ class PlaneByPointAndLine(BasePlane):
         self.line = line
 
     def get_serializing_dict(self):
-        return {self.id:
+        return {
+            self.id:
             {
                 "type": self.type,
                 "name": self.name,
@@ -312,12 +260,13 @@ class PlaneByPointAndSegment(BasePlane):
         self.segment = segment
 
     def get_serializing_dict(self):
-        return {self.id:
-            {
-                "type": self.type,
-                "name": self.name,
-                "forming objects": [self.point.id, self.segment.id]
-            }
+        return {
+            self.id:
+                {
+                    "type": self.type,
+                    "name": self.name,
+                    "forming objects": [self.point.id, self.segment.id]
+                }
         }
 
     def get_pivot_points(self):
@@ -341,22 +290,14 @@ class Segment(BaseGeometryObject):
         self.point2 = point2
 
     def get_serializing_dict(self):
-        return {self.id:
-            {
-                "type": self.type,
-                "name": self.name,
-                "forming objects": [self.point1.id, self.point2.id]
-            }
+        return {
+            self.id:
+                {
+                    "type": self.type,
+                    "name": self.name,
+                    "forming objects": [self.point1.id, self.point2.id]
+                }
         }
-
-    def get_dist_to_point(self, point):
-        pass
-
-    def get_dist_to_line(self, line):
-        pass
-
-    def get_dist_to_plane(self, plane):
-        pass
 
     def get_vec(self):
         return self.point2.pos - self.point1.pos
@@ -396,12 +337,13 @@ class Triangle(BaseGeometryObject):
         self.point3 = point3
 
     def get_serializing_dict(self):
-        return {self.id:
-            {
-                "type": self.type,
-                "name": self.name,
-                "forming objects": [self.point1.id, self.point2.id, self.point3.id]
-            }
+        return {
+            self.id:
+                {
+                    "type": self.type,
+                    "name": self.name,
+                    "forming objects": [self.point1.id, self.point2.id, self.point3.id]
+                }
         }
 
     def get_points(self) -> (glm.vec3, glm.vec3, glm.vec3):
@@ -413,24 +355,12 @@ class BaseVolumetricBody(BaseGeometryObject):
         super(BaseVolumetricBody, self).__init__('base_3d_body', name, id)
         self.points = points
 
-    def get_dist_to_plane(self, plane):
-        raise Exception("Not implement")
-
-    def get_dist_to_line(self, line):
-        raise Exception("Not implement")
-
-    def get_dist_to_point(self, point):
-        raise Exception("Not implement")
-
     def get_serializing_dict(self):
-        return {self.id:
-            {
-                "name": self.name,
-                "type": self.type,
-                "forming objects": self.points
-            }
+        return {
+            self.id:
+                {
+                    "name": self.name,
+                    "type": self.type,
+                    "forming objects": self.points
+                }
         }
-
-
-if __name__ == '__main__':
-    print('Py equal shit')

@@ -23,6 +23,8 @@ class SceneActionsInterface:
 
 
 class GLSceneInterface:
+    on_scene_changed: Event
+
     def get_scene(self) -> Scene:
         raise NotImplementedError
 

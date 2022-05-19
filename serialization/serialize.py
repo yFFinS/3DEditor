@@ -1,27 +1,59 @@
 import json
+
+import glm
+
+from scene.camera import Camera
+from scene.scene import Scene
+from scene.scene_object import SceneObject
 from serialization.generator_of_decoding_objects import generate_object_by_deserialized_data
 
 
-def serialize(scene, file_name):
-    """Сохраняет текущую сцену в json файл"""
-    file = open(f"{file_name}.json", "w")
-    objects = scene.get_objects()
-    data = dict()
-    for obj in objects:
-        data.update(obj.get_serializing_dict())
-    json.dump(data, file)
-    close(file)
+def extract_camera_settings(camera: Camera):
+    pos = camera.translation
+    rot = camera.rotation
+    return {
+        "translation": f"{pos.x} {pos.y} {pos.z}",
+        "rotation": f"{rot.w} {rot.x} {rot.y} {rot.z}",
+    }
 
-def deserialize(file_name):
-    """По json файлу возвращает список объектов сцены"""
-    file = open(f"{file_name}.json", "r")
-    data = json.load(file)
+
+def inject_camera_settings(camera: Camera, settings: dict[str, str]):
+    pos = glm.vec3(*[float(value) for value in settings["translation"].split()])
+    rot = glm.quat(*[float(value) for value in settings["rotation"].split()])
+    glm.vec2()
+    camera.translation = pos
+    camera.rotation = rot
+
+
+def serialize_scene(scene: Scene, file_name: str):
+    serialized_objects = {}
+
+    for obj in scene.objects:
+        primitive = obj.primitive
+        if primitive is None:
+            print(f"Scene object name: {obj.name} id: {obj.id} has no primitive")
+            continue
+        serialized_obj = primitive.get_serializing_dict()
+        serialized_objects.update(serialized_obj)
+
+    data = {
+        "camera": extract_camera_settings(scene.camera),
+        "objects": serialized_objects
+    }
+
+    with open(file_name, "w") as file:
+        json.dump(data, file)
+
+
+def deserialize_scene(file_name: str) -> (dict[str, str], dict[str, SceneObject]):
+    with open(file_name, "r") as file:
+        data = json.load(file)
+
     objects = dict()
-    for id in data.keys():
-        # TODO: Изменить чтоб Бим бим бам бам
-        generate_object_by_deserialized_data(id, data[id], data, objects)
-    return objects
 
+    camera_settings = data["camera"]
+    object_data = data["objects"]
+    for obj_id in object_data:
+        generate_object_by_deserialized_data(obj_id, object_data, objects)
+    return camera_settings, objects
 
-if __name__ == "__main__":
-    pass
