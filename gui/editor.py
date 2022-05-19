@@ -104,7 +104,8 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         if self.__geometry_builder is not None and self.__geometry_builder.has_any_progress:
             self.__geometry_builder.cancel()
         else:
-            self.__scene.deselect([obj for obj in self.__scene.objects if obj.selected])
+            self.__scene.deselect(
+                [obj for obj in self.__scene.objects if obj.selected])
         self.update()
 
     def __redraw_internal(self, *args, **kwargs):
@@ -130,19 +131,23 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         def get_shader_path(shader):
             return os.path.join("shaders", shader)
 
-        self.__shaders = [ShaderProgram(get_shader_path("default.vert"), get_shader_path("default.frag")),
-                          ShaderProgram(get_shader_path("point_inst.vert"), get_shader_path("default.frag")),
-                          ShaderProgram(get_shader_path("line.vert"), get_shader_path("default.frag")),
-                          ShaderProgram(get_shader_path("triangle.vert"), get_shader_path("default.frag"))]
+        self.__shaders = [ShaderProgram(get_shader_path("default.vert"),
+                                        get_shader_path("default.frag")),
+                          ShaderProgram(get_shader_path("batch.vert"),
+                                        get_shader_path("default.frag")),
+                          ShaderProgram(get_shader_path("line.vert"),
+                                        get_shader_path("default.frag")),
+                          ShaderProgram(get_shader_path("triangle.vert"),
+                                        get_shader_path("default.frag"))]
 
         RawSceneObject.SHADER_PROGRAM = self.__shaders[0]
+
         ScenePoint.SHADER_PROGRAM = self.__shaders[1]
+        SceneEdge.SHADER_PROGRAM = self.__shaders[1]
+        SceneFace.SHADER_PROGRAM = self.__shaders[1]
 
         SceneLine.SHADER_PROGRAM = self.__shaders[2]
-        SceneEdge.SHADER_PROGRAM = self.__shaders[2]
-
         ScenePlane.SHADER_PROGRAM = self.__shaders[3]
-        SceneFace.SHADER_PROGRAM = self.__shaders[3]
 
         self.__scene.camera = Camera(self.width(), self.height())
         self.__camera_controller = CameraController(self.__scene.camera)
@@ -168,7 +173,8 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
     @profile
     def paintGL(self):
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
-        self.__scene.render()
+        #self.__scene.render()
+        self.__scene.render_shared()
 
     def on_mouse_pressed(self, event: QMouseEvent):
         if self.__geometry_builder is not None:

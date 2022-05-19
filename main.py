@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QApplication
 from gui.editor import Window
 from profiling.profiler import Profiler
 
-PROFILE = False
+PROFILE = True
 
 if __name__ == "__main__":
     if PROFILE:

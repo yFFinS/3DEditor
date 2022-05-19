@@ -9,8 +9,10 @@ from OpenGL import GL
 
 from profiling.profiler import profile
 from core.event import Event
+from render.shared_vbo import SharedMesh
 from .camera import Camera
-from .render_geometry import ScenePlane
+from .render_geometry import ScenePlane, ScenePoint, SceneEdge, SceneFace, \
+    SceneLine
 from .scene_object import SceneObject, RawSceneObject
 
 
@@ -36,7 +38,8 @@ class Scene:
         self.on_objects_removed.invoke(removed)
 
     @profile
-    def __remove_object_silent(self, scene_object: RawSceneObject) -> list[RawSceneObject]:
+    def __remove_object_silent(self, scene_object: RawSceneObject) -> list[
+        RawSceneObject]:
         if scene_object.id not in self.__objects:
             return []
         self.__objects.pop(scene_object.id)
@@ -84,7 +87,7 @@ class Scene:
             return
 
         layers, transparent = self.__group_by_render_layer(self.all_objects)
-        
+
         for layer in layers:
             others, points, lines, triangles \
                 = self.__group_objects_by_render_params(layer)
@@ -110,6 +113,83 @@ class Scene:
 
         for tr in transparent:
             self.__render_single(tr)
+
+    @staticmethod
+    def __group_by_object_type(scene_objects):
+        other, instanced, lines, planes = [], [], [], []
+        for obj in scene_objects:
+            if isinstance(obj, (ScenePoint, SceneEdge, SceneFace)):
+                instanced.append(obj)
+            elif isinstance(obj, SceneLine):
+                lines.append(obj)
+            elif isinstance(obj, ScenePlane):
+                planes.append(obj)
+            else:
+                other.append(obj)
+        return other, instanced, lines, planes
+
+    def render_shared(self):
+        objects = self.all_objects
+        other, instanced, lines, planes = self.__group_by_object_type(objects)
+
+        for obj in other:
+            self.__render_single(obj)
+
+        GL.glLineWidth(1.4)
+        GL.glPointSize(6)
+
+        for plane in planes:
+            self.__render_single(plane)
+
+        points, edges, faces = [self.__group_by_mesh(temp) for temp in
+                                self.__group_by_render_mode(instanced)]
+
+        for face in faces.values():
+            self.__render_single_shared(face[0])
+
+        GL.glDepthMask(GL.GL_FALSE)
+        for line in lines:
+            self.__render_single(line)
+
+        for edge in edges.values():
+            self.__render_single_shared(edge[0])
+
+        for point in points.values():
+            self.__render_single_shared(point[0])
+        GL.glDepthMask(GL.GL_TRUE)
+
+    def __render_single_shared(self, scene_object):
+        mesh = scene_object.mesh.get_mesh()
+        shader = scene_object.shader_program
+
+        shader.use()
+        shader.set_mat4("Batch.Mat_PV", self.camera.proj_view_matrix)
+
+        mesh.bind_vba()
+        GL.glDrawArrays(scene_object.render_mode, 0, mesh.get_vertex_count())
+        mesh.unbind_vba()
+
+    @staticmethod
+    def __group_by_render_mode(scene_objects):
+        points, lines, triangles = [], [], []
+        for scene_object in scene_objects:
+            if scene_object.render_mode == GL.GL_POINTS:
+                points.append(scene_object)
+            elif scene_object.render_mode == GL.GL_LINES:
+                lines.append(scene_object)
+            else:
+                triangles.append(scene_object)
+        return points, lines, triangles
+
+    @staticmethod
+    def __group_by_mesh(scene_objects):
+        result = {}
+        for scene_object in scene_objects:
+            mesh = scene_object.mesh.get_mesh()
+            if mesh not in result:
+                result[mesh] = []
+            result[mesh].append(scene_object)
+        return result
 
     @staticmethod
     @profile
@@ -216,6 +296,7 @@ class Scene:
 
         event_args = []
         for obj in filter(lambda o: not o.selected, scene_objects):
+            obj.set_selected(True)
             obj.selected = True
             event_args.append(obj)
 
@@ -236,6 +317,7 @@ class Scene:
 
         event_args = []
         for obj in filter(lambda o: o.selected, scene_objects):
+            obj.set_selected(False)
             obj.selected = False
             event_args.append(obj)
 

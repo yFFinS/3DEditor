@@ -129,6 +129,9 @@ class SceneObject(RawSceneObject):
     def on_parent_position_updated(self, parent: 'SceneObject'):
         pass
 
+    def set_selected(self, value: bool):
+        pass
+
     def get_selection_weight(self, camera: Camera,
                              click_pos: glm.vec2) -> float:
         """

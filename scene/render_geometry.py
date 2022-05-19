@@ -5,6 +5,7 @@ import glm
 
 from core.Base_geometry_objects import *
 from render.mesh import Mesh
+from render.shared_vbo import SharedMesh
 from scene.camera import Camera
 from scene.scene_object import SceneObject, RawSceneObject
 from core.helpers import *
@@ -17,8 +18,7 @@ SELECT_FACE = 1 << 4
 
 
 class ScenePoint(SceneObject):
-    USE_SHARED_MESH = True
-    __shared_mesh = None
+    __selected_color = glm.vec4(0.4, 0.4, 1, 1)
 
     def __init__(self, point: Point):
         super(ScenePoint, self).__init__(point)
@@ -29,28 +29,28 @@ class ScenePoint(SceneObject):
         self.render_layer = 1
         self.selection_mask = SELECT_POINT
 
-        if ScenePoint.USE_SHARED_MESH:
-            if ScenePoint.__shared_mesh is None:
-                ScenePoint.__shared_mesh = ScenePoint.__create_mesh()
-            self.mesh = ScenePoint.__shared_mesh
-        else:
-            self.mesh = self.__create_mesh()
+        self.mesh = SharedMesh.request_mesh(1, self.render_mode)
+        self.__update_local_position()
+        self.mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)]))
+
+    def set_selected(self, value: bool):
+        self.mesh.set_colors(
+            np.array([ScenePoint.__selected_color
+                      if value else glm.vec4(0, 0, 0, 1)]))
 
     @classmethod
     def from_pos(cls, pos: glm.vec3) -> 'ScenePoint':
         return ScenePoint(Point(pos))
 
-    @staticmethod
-    def __create_mesh():
-        mesh = Mesh()
-        mesh.set_positions(np.array([glm.vec3(0, 0, 0)]))
-        mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)]))
-        return mesh
+    def __update_local_position(self):
+        self.mesh.set_positions(np.array([self.point.pos]))
 
     def update_hierarchy_position(self, pos: glm.vec3,
                                   ignored: set['SceneObject']):
         self.point.pos = pos
         self.transform.translation = pos
+        self.__update_local_position()
+
         for child in self.children:
             if child not in ignored:
                 child.on_parent_position_updated(self)
@@ -99,8 +99,10 @@ class SceneLine(SceneObject):
         self.transform.translation = pos
 
         ignored.add(self)
-        for point in (parent for parent in self.parents if parent not in ignored):
-            point.update_hierarchy_position(point.transform.translation + move, ignored)
+        for point in (parent for parent in self.parents if
+                      parent not in ignored):
+            point.update_hierarchy_position(point.transform.translation + move,
+                                            ignored)
 
     def prepare_render(self, camera: Camera):
         dist = glm.distance(self.transform.translation, camera.translation)
@@ -165,13 +167,15 @@ class ScenePlane(SceneObject):
         return self
 
     @classmethod
-    def by_point_and_line(cls, scene_point: ScenePoint, scene_line: SceneLine) -> 'ScenePlane':
+    def by_point_and_line(cls, scene_point: ScenePoint,
+                          scene_line: SceneLine) -> 'ScenePlane':
         plane = PlaneByPointAndLine(scene_point.point, scene_line.line)
         self = cls(plane, scene_point, scene_line)
         return self
 
     @classmethod
-    def by_point_and_segment(cls, scene_point: ScenePoint, scene_segment: 'SceneEdge') -> 'ScenePlane':
+    def by_point_and_segment(cls, scene_point: ScenePoint,
+                             scene_segment: 'SceneEdge') -> 'ScenePlane':
         plane = PlaneByPointAndSegment(scene_point.point, scene_segment.edge)
         self = cls(plane, scene_point, scene_segment)
         return self
@@ -213,14 +217,18 @@ class ScenePlane(SceneObject):
         direction = camera.screen_to_world(click_pos)
 
         intersection_distance1 = ray_triangle_intersection_distance(
-            origin, direction, *[glm.vec3(point) for point in transformed_points[:3]])
+            origin, direction,
+            *[glm.vec3(point) for point in transformed_points[:3]])
         intersection_distance2 = ray_triangle_intersection_distance(
-            origin, direction, *[glm.vec3(point) for point in transformed_points[1:]])
+            origin, direction,
+            *[glm.vec3(point) for point in transformed_points[1:]])
 
-        if glm.isnan(intersection_distance1) and glm.isnan(intersection_distance2):
+        if glm.isnan(intersection_distance1) and glm.isnan(
+                intersection_distance2):
             return np.nan
 
-        distance = intersection_distance1 if not glm.isnan(intersection_distance1) else intersection_distance2
+        distance = intersection_distance1 if not glm.isnan(
+            intersection_distance1) else intersection_distance2
         mapped = glm.atan(distance) / (glm.pi() / 2) * 0.8
         return 1 - mapped
 
@@ -270,7 +278,8 @@ class SceneEdge(SceneObject):
 
         ignored.add(self)
         for point in (point for point in self.parents if point not in ignored):
-            point.update_hierarchy_position(point.transform.translation + move, ignored)
+            point.update_hierarchy_position(point.transform.translation + move,
+                                            ignored)
 
         for child in (child for child in self.children if child not in ignored):
             child.on_parent_position_updated(self)
@@ -301,10 +310,9 @@ class SceneFace(SceneObject):
         self.render_layer = 1
         self.selection_mask = SELECT_FACE
 
-        self.mesh = Mesh()
+        self.mesh = SharedMesh.request_mesh(3, self.render_mode)
         self.__update_local_position()
-        self.mesh.set_colors(
-            np.array([SceneFace.COLOR] * self.mesh.get_vertex_count()))
+        self.mesh.set_colors(np.array([SceneFace.COLOR] * 3))
 
     @classmethod
     def by_three_points(cls, scene_point1: ScenePoint, scene_point2: ScenePoint,
@@ -318,8 +326,7 @@ class SceneFace(SceneObject):
         p1, p2, p3 = self.face.point1, self.face.point2, self.face.point3
         center = (p1.pos + p2.pos + p3.pos) / 3
         self.transform.translation = center
-        self.mesh.set_positions(
-            np.array([p1.pos - center, p2.pos - center, p3.pos - center]))
+        self.mesh.set_positions(np.array([p1.pos, p2.pos, p3.pos]))
 
     def update_hierarchy_position(self, pos: glm.vec3,
                                   ignored: set['SceneObject']):
