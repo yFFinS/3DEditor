@@ -113,7 +113,7 @@ class LineBuilder(BaseBuilder):
             ray = camera.screen_to_world(pos)
             place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
             place = round_vec3(place)
-            point = ScenePoint.from_pos(place)
+            point = ScenePoint.by_pos(place)
             self._push_object(point, True)
 
         if self.p1:
@@ -187,7 +187,7 @@ class PlaneBuilder(BaseBuilder):
             ray = camera.screen_to_world(pos)
             place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
             place = round_vec3(place)
-            point = ScenePoint.from_pos(place)
+            point = ScenePoint.by_pos(place)
             self._push_object(point, True)
             self.points.append(point)
 
@@ -294,7 +294,7 @@ class EdgeBuilder(BaseBuilder):
             ray = camera.screen_to_world(pos)
             place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
             place = round_vec3(place)
-            point = ScenePoint.from_pos(place)
+            point = ScenePoint.by_pos(place)
             self._push_object(point, True)
 
         if self.p1:
@@ -361,7 +361,7 @@ class FaceBuilder(BaseBuilder):
             ray = camera.screen_to_world(pos)
             place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
             place = round_vec3(place)
-            point = ScenePoint.from_pos(place)
+            point = ScenePoint.by_pos(place)
             self._push_object(point, True)
 
         if self.p2 and self.edge is not None:
@@ -439,7 +439,7 @@ class RectBuilder(BaseBuilder):
             ray = camera.screen_to_world(pos)
             place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
             place = round_vec3(place)
-            point = ScenePoint.from_pos(place)
+            point = ScenePoint.by_pos(place)
             self._push_object(point, True)
 
         if self.p1:
@@ -479,7 +479,7 @@ class RectBuilder(BaseBuilder):
         nbr = nbl + dx
 
         positions = [fbr, ftl, ftr, nbl, ntl, nbr]
-        points = [self.p1] + [ScenePoint.from_pos(pos) for pos in positions] + [p2]
+        points = [self.p1] + [ScenePoint.by_pos(pos) for pos in positions] + [p2]
         for i in range(1, len(points) - 1):
             self._push_object(points[i], True)
 

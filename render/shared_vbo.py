@@ -1,3 +1,4 @@
+import uuid
 from typing import Iterable
 
 import glm
@@ -27,16 +28,30 @@ class VirtualMesh:
             print("Выход за границы выделенного массива")
         self.__shared_mesh.set_colors_offset(colors, self.__vertex_offset)
 
+    def clear(self):
+        self.__shared_mesh.clear_offset(self.__vertex_count,
+                                        self.__vertex_offset)
+
 
 class SharedMesh(Mesh):
+    BATCH_SIZE = 2 ** 16
+
     def __init__(self, max_vertices: int, render_mode: GL.GL_CONSTANT):
         super(SharedMesh, self).__init__()
+
+        self.__id = uuid.uuid4()
 
         self.max_vertices = max_vertices
         self.used_vertices = 0
         self.render_mode = render_mode
         self._vbo_positions.reserve_size(max_vertices, glm.vec3)
         self._vbo_colors.reserve_size(max_vertices, glm.vec4)
+
+    def clear_offset(self, vertices: int, offset: int):
+        self._vbo_positions.clear_offset(glm.sizeof(glm.vec3) * vertices,
+                                         glm.sizeof(glm.vec3) * offset)
+        self._vbo_colors.clear_offset(glm.sizeof(glm.vec4) * vertices,
+                                      glm.sizeof(glm.vec4) * offset)
 
     def set_positions_offset(self, positions: NDArray[glm.vec3], offset: int):
         self._vbo_positions.set_data_offset(
@@ -48,22 +63,35 @@ class SharedMesh(Mesh):
                                          glm.sizeof(glm.vec4) * offset, colors)
 
     __meshes = []
-    __base_vertex_count = 2 ** 14
+    __available = []
 
     @staticmethod
     def request_mesh(vertices: int,
                      render_mode: GL.GL_CONSTANT) -> 'VirtualMesh':
-        meshes = SharedMesh.__meshes
-        for mesh in meshes:
-            if (mesh.render_mode == render_mode and
-                    mesh.used_vertices + vertices <= mesh.max_vertices):
+        meshes = SharedMesh.__available
+        meshes_with_matching_render_mode = [mesh for mesh in meshes if
+                                            mesh.render_mode == render_mode]
+        for mesh in meshes_with_matching_render_mode:
+            if mesh.used_vertices + vertices <= mesh.max_vertices:
                 vmesh = VirtualMesh(mesh, mesh.used_vertices, vertices)
                 mesh.used_vertices += vertices
                 return vmesh
-        smesh = SharedMesh(SharedMesh.__base_vertex_count, render_mode)
+            else:
+                meshes.remove(mesh)
+
+        smesh = SharedMesh(SharedMesh.BATCH_SIZE, render_mode)
         smesh.used_vertices = vertices
         meshes.append(smesh)
+        SharedMesh.__meshes.append(smesh)
+
         return VirtualMesh(smesh, 0, vertices)
+
+    @staticmethod
+    def clear_meshes():
+        for mesh in SharedMesh.get_all_meshes():
+            mesh.dispose()
+        SharedMesh.__meshes.clear()
+        SharedMesh.__available.clear()
 
     @staticmethod
     def get_all_meshes() -> Iterable['SharedMesh']:
@@ -71,3 +99,6 @@ class SharedMesh(Mesh):
 
     def get_vertex_count(self) -> int:
         return self.used_vertices
+
+    def __hash__(self):
+        return hash(self.__id)

@@ -1,0 +1,17 @@
+__group_by_mesh        : avg_time=0.83 ms     call_cnt=81     max_time=3.01 ms     tot_time=66.58 ms  
+__group_by_object_type : avg_time=3.18 ms     call_cnt=27     max_time=15.63 ms    tot_time=82.69 ms  
+__group_by_render_mode : avg_time=2.82 ms     call_cnt=27     max_time=7.00 ms     tot_time=73.37 ms  
+__remove_object        : avg_time=0.01 ms     call_cnt=21978  max_time=15.63 ms    tot_time=171.89 ms 
+__remove_object_silent : avg_time=0.04 ms     call_cnt=43934  max_time=15.64 ms    tot_time=1828.22 ms
+__render_single        : avg_time=0.19 ms     call_cnt=54     max_time=1.04 ms     tot_time=10.03 ms  
+__render_single_shared : avg_time=0.07 ms     call_cnt=56     max_time=1.00 ms     tot_time=4.01 ms   
+__update_mesh          : avg_time=0.01 ms     call_cnt=21978  max_time=31.01 ms    tot_time=259.84 ms 
+add_object             : avg_time=0.02 ms     call_cnt=21980  max_time=51.01 ms    tot_time=436.14 ms 
+deselect               : avg_time=0.02 ms     call_cnt=43956  max_time=15.64 ms    tot_time=703.18 ms 
+on_objects_added       : avg_time=0.02 ms     call_cnt=21978  max_time=51.01 ms    tot_time=342.04 ms 
+on_objects_deselected  : avg_time=0.02 ms     call_cnt=21978  max_time=15.64 ms    tot_time=421.92 ms 
+on_objects_removed     : avg_time=187.51 ms   call_cnt=1      max_time=187.51 ms   tot_time=187.51 ms 
+paintGL                : avg_time=9.18 ms     call_cnt=27     max_time=19.00 ms    tot_time=238.68 ms 
+remove_objects         : avg_time=1406.33 ms  call_cnt=1      max_time=1406.33 ms  tot_time=1406.33 ms
+render_shared          : avg_time=9.18 ms     call_cnt=27     max_time=19.00 ms    tot_time=238.68 ms 
+select                 : avg_time=0.01 ms     call_cnt=21978  max_time=15.63 ms    tot_time=171.89 ms 

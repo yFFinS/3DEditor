@@ -6,14 +6,14 @@ class FuncInfo:
     name: str = ''
     call_count: int = 0
     max_time: float = 0
-    min_time: float = 10 ** 18
+    tot_time: float = 0
     avg_time: float = 0
 
     def __init__(self, func: Callable):
         self.name = func.__name__
 
     def add_call_info(self, time_spent: float):
-        self.min_time = min(self.min_time, time_spent)
+        self.tot_time += time_spent
         self.max_time = max(self.max_time, time_spent)
 
         t, avg = self.call_count, self.avg_time
@@ -53,30 +53,30 @@ class Profiler:
                 longest_name = name
         max_call_count = 0
         max_time = 0
-        min_time = 0
+        tot_time = 0
         max_avg = 0
         for info in profiler.__calls.values():
             max_call_count = max(max_call_count, info.call_count)
             max_time = max(max_time, info.max_time)
-            min_time = max(min_time, info.min_time)
+            tot_time = max(tot_time, info.tot_time)
             max_avg = max(max_avg, info.avg_time)
         max_call_count = str(max_call_count)
-        max_time = f"{max_time:2f}"
-        min_time = f"{min_time:2f}"
-        max_avg = f"{max_avg:2f}"
+        max_time = f"{max_time:.2f} ms"
+        tot_time = f"{tot_time:.2f} ms"
+        max_avg = f"{max_avg:.2f} ms"
 
         with open(filename, "w+") as f:
             for name in names:
                 info = profiler.__calls[name]
-                avg_str = f'{info.avg_time:.2f}'
+                avg_str = f'{info.avg_time:.2f} ms'
                 call_str = str(info.call_count)
-                max_str = f'{info.max_time:.2f}'
-                min_str = f'{info.min_time:.2f}'
+                max_str = f'{info.max_time:.2f} ms'
+                tot_str = f'{info.tot_time:.2f} ms'
                 info_str = f"{info.name:<{len(longest_name)}} : " \
-                           f"avg_time={avg_str:<{len(max_avg)}}ms  " \
-                           f"call_count={call_str:<{len(max_call_count)}}  " \
-                           f"max_time={max_str:<{len(max_time)}}ms  " \
-                           f"min_time={min_str:<{len(min_time)}}ms\n"
+                           f"avg_time={avg_str:<{len(max_avg)}}  " \
+                           f"call_cnt={call_str:<{len(max_call_count)}}  " \
+                           f"max_time={max_str:<{len(max_time)}}  " \
+                           f"tot_time={tot_str:<{len(tot_time)}}\n"
                 f.write(info_str)
 
 

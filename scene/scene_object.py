@@ -132,6 +132,9 @@ class SceneObject(RawSceneObject):
     def set_selected(self, value: bool):
         pass
 
+    def on_delete(self):
+        pass
+
     def get_selection_weight(self, camera: Camera,
                              click_pos: glm.vec2) -> float:
         """

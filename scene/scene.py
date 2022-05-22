@@ -21,14 +21,67 @@ class Scene:
         self.__objects = {}
         self.camera: Optional[Camera] = None
 
+        self.__points = {}
+        self.__edges = {}
+        self.__faces = {}
+        self.__other = set()
+        self.__planes = set()
+        self.__lines = set()
+
         self.on_objects_added = Event()
         self.on_objects_removed = Event()
         self.on_objects_selected = Event()
         self.on_objects_deselected = Event()
 
+    @staticmethod
+    def __add_or_create(dest, obj):
+        key = obj.mesh.get_mesh()
+        if key not in dest:
+            dest[key] = {obj}
+        else:
+            dest[key].add(obj)
+
+    @staticmethod
+    def __remove(src, obj):
+        key = obj.mesh.get_mesh()
+        src[key].remove(obj)
+        if len(src[key]) == 0:
+            src.pop(key)
+
+    @profile
+    def __store_object(self, scene_object):
+        if isinstance(scene_object, ScenePoint):
+            self.__add_or_create(self.__points, scene_object)
+        elif isinstance(scene_object, SceneEdge):
+            self.__add_or_create(self.__edges, scene_object)
+        elif isinstance(scene_object, SceneFace):
+            self.__add_or_create(self.__faces, scene_object)
+        elif isinstance(scene_object, SceneLine):
+            self.__lines.add(scene_object)
+        elif isinstance(scene_object, ScenePlane):
+            self.__planes.add(scene_object)
+        else:
+            self.__other.add(scene_object)
+
+    @profile
+    def __remove_from_storage(self, scene_object):
+        if isinstance(scene_object, ScenePoint):
+            self.__remove(self.__points, scene_object)
+        elif isinstance(scene_object, SceneEdge):
+            self.__remove(self.__edges, scene_object)
+        elif isinstance(scene_object, SceneFace):
+            self.__remove(self.__faces, scene_object)
+        elif isinstance(scene_object, SceneLine):
+            self.__lines.remove(scene_object)
+        elif isinstance(scene_object, ScenePlane):
+            self.__planes.remove(scene_object)
+        else:
+            self.__other.remove(scene_object)
+
     @profile
     def add_object(self, scene_object: RawSceneObject):
         self.__objects[scene_object.id] = scene_object
+        self.__store_object(scene_object)
         if isinstance(scene_object, SceneObject):
             self.on_objects_added.invoke([scene_object])
 
@@ -38,16 +91,19 @@ class Scene:
         self.on_objects_removed.invoke(removed)
 
     @profile
-    def __remove_object_silent(self, scene_object: RawSceneObject) -> list[
-        RawSceneObject]:
+    def __remove_object_silent(self, scene_object: RawSceneObject) \
+            -> list[RawSceneObject]:
         if scene_object.id not in self.__objects:
             return []
+
         self.__objects.pop(scene_object.id)
+        self.__remove_from_storage(scene_object)
         if not isinstance(scene_object, SceneObject):
             return []
         removed = [scene_object]
-        if scene_object.selected:
-            self.deselect(scene_object)
+
+        scene_object.on_delete()
+
         for child in scene_object.children:
             removed.extend(self.__remove_object_silent(child))
         return removed
@@ -57,6 +113,7 @@ class Scene:
         invoke_list = []
         for obj in scene_objects:
             self.__objects[obj.id] = obj
+            self.__store_object(obj)
             if isinstance(obj, SceneObject):
                 invoke_list.append(obj)
         self.on_objects_added.invoke(invoke_list)
@@ -78,86 +135,60 @@ class Scene:
             if isinstance(obj, SceneObject):
                 yield obj
 
-    def load(self, filename: str):
-        pass
-
     @profile
-    def render(self):
-        if not self.camera:
-            return
-
-        layers, transparent = self.__group_by_render_layer(self.all_objects)
-
-        for layer in layers:
-            others, points, lines, triangles \
-                = self.__group_objects_by_render_params(layer)
-
-            for other in others:
-                self.__render_single(other)
-
-            if triangles:
-                for triangle in triangles:
-                    self.__render_single(triangle)
-
-            GL.glDepthMask(GL.GL_FALSE)
-            if lines:
-                GL.glLineWidth(1.4)
-                for line in lines:
-                    self.__render_single(line)
-
-            if points:
-                GL.glPointSize(6)
-                for point in points:
-                    self.__render_single(point)
-            GL.glDepthMask(GL.GL_TRUE)
-
-        for tr in transparent:
-            self.__render_single(tr)
-
-    @staticmethod
-    def __group_by_object_type(scene_objects):
-        other, instanced, lines, planes = [], [], [], []
-        for obj in scene_objects:
-            if isinstance(obj, (ScenePoint, SceneEdge, SceneFace)):
-                instanced.append(obj)
-            elif isinstance(obj, SceneLine):
-                lines.append(obj)
-            elif isinstance(obj, ScenePlane):
-                planes.append(obj)
-            else:
-                other.append(obj)
-        return other, instanced, lines, planes
-
     def render_shared(self):
-        objects = self.all_objects
-        other, instanced, lines, planes = self.__group_by_object_type(objects)
-
-        for obj in other:
+        for obj in self.__other:
             self.__render_single(obj)
 
         GL.glLineWidth(1.4)
         GL.glPointSize(6)
 
-        for plane in planes:
+        for plane in self.__planes:
             self.__render_single(plane)
 
-        points, edges, faces = [self.__group_by_mesh(temp) for temp in
-                                self.__group_by_render_mode(instanced)]
+        def get_first_values(src):
+            for v in src.values():
+                yield next(iter(v))
 
-        for face in faces.values():
-            self.__render_single_shared(face[0])
+        for face in get_first_values(self.__faces):
+            self.__render_single_shared(face)
 
-        GL.glDepthMask(GL.GL_FALSE)
-        for line in lines:
+        GL.glPushAttrib(GL.GL_ENABLE_BIT)
+
+        GL.glDisable(GL.GL_DEPTH_TEST)
+        GL.glEnable(GL.GL_LINE_STIPPLE)
+
+        for obj in self.__other:
+            self.__render_single(obj)
+
+        GL.glLineWidth(1.4)
+        GL.glPointSize(6)
+
+        for line in self.__lines:
             self.__render_single(line)
 
-        for edge in edges.values():
-            self.__render_single_shared(edge[0])
+        for edge in get_first_values(self.__edges):
+            self.__render_single_shared(edge)
 
-        for point in points.values():
-            self.__render_single_shared(point[0])
+        GL.glPopAttrib()
+
+        GL.glDepthMask(GL.GL_FALSE)
+        for line in self.__lines:
+            self.__render_single(line)
+
+        for edge in get_first_values(self.__edges):
+            self.__render_single_shared(edge)
+
         GL.glDepthMask(GL.GL_TRUE)
 
+        GL.glDisable(GL.GL_DEPTH_TEST)
+
+        for point in get_first_values(self.__points):
+            self.__render_single_shared(point)
+
+        GL.glEnable(GL.GL_DEPTH_TEST)
+
+    @profile
     def __render_single_shared(self, scene_object):
         mesh = scene_object.mesh.get_mesh()
         shader = scene_object.shader_program
@@ -168,93 +199,6 @@ class Scene:
         mesh.bind_vba()
         GL.glDrawArrays(scene_object.render_mode, 0, mesh.get_vertex_count())
         mesh.unbind_vba()
-
-    @staticmethod
-    def __group_by_render_mode(scene_objects):
-        points, lines, triangles = [], [], []
-        for scene_object in scene_objects:
-            if scene_object.render_mode == GL.GL_POINTS:
-                points.append(scene_object)
-            elif scene_object.render_mode == GL.GL_LINES:
-                lines.append(scene_object)
-            else:
-                triangles.append(scene_object)
-        return points, lines, triangles
-
-    @staticmethod
-    def __group_by_mesh(scene_objects):
-        result = {}
-        for scene_object in scene_objects:
-            mesh = scene_object.mesh.get_mesh()
-            if mesh not in result:
-                result[mesh] = []
-            result[mesh].append(scene_object)
-        return result
-
-    @staticmethod
-    @profile
-    def __group_by_render_layer(objects):
-        groups = {}
-        transparent = []
-        for obj in objects:
-            if isinstance(obj, ScenePlane):
-                transparent.append(obj)
-                continue
-            layer = obj.render_layer
-            if layer not in groups:
-                groups[layer] = [obj]
-            else:
-                groups[layer].append(obj)
-
-        result = [groups[key] for key in sorted(groups)]
-        return result, transparent
-
-    @staticmethod
-    @profile
-    def __group_objects_by_render_params(objects):
-        others, points, lines, triangles = [], [], [], []
-        for obj in objects:
-            if not isinstance(obj, SceneObject):
-                others.append(obj)
-                continue
-            if obj.render_mode == GL.GL_TRIANGLES:
-                triangles.append(obj)
-            elif obj.render_mode == GL.GL_LINES:
-                lines.append(obj)
-            elif obj.render_mode == GL.GL_POINTS:
-                points.append(obj)
-            else:
-                others.append(obj)
-        return others, points, lines, triangles
-
-    def __render_instanced(self, scene_objects: list[RawSceneObject]):
-        raise NotImplemented
-        # for obj in scene_objects:
-        #     obj.prepare_render(self.camera)
-        #
-        # mvps = [obj.get_render_mat(self.camera) for obj in scene_objects]
-        #
-        # # Предполагается, что у всех объектов один шейдер
-        # shader = scene_objects[0].shader_program
-        # shader.use()
-        # shader.set_mat4("Instance.MVP", mvp)
-        #
-        # selected_value = 1 if isinstance(scene_object, SceneObject) and scene_object.selected else -1
-        # scene_object.shader_program.set_float("Instance.Selected",
-        #                                       selected_value)
-        #
-        # scene_object.mesh.bind_vba()
-        # indices = scene_object.mesh.get_index_count()
-        # if indices != 0:
-        #     GL.glDrawElements(scene_object.render_mode,
-        #                       indices, GL.GL_UNSIGNED_INT, None)
-        # else:
-        #     GL.glDrawArrays(scene_object.render_mode,
-        #                     0, scene_object.mesh.get_vertex_count())
-        # scene_object.mesh.unbind_vba()
-        #
-        # for obj in scene_objects:
-        #     obj.render_completed(self.camera)
 
     @profile
     def __render_single(self, scene_object: RawSceneObject):
@@ -338,7 +282,7 @@ class Scene:
             if np.isnan(weight):
                 continue
             if weight < 0 or weight > 1:
-                print(f"Вес должен быть от 0 до 1. Был {weight} у {obj}.")
+                print(f"Weight must be between 0 and 1. Was {weight} at {obj}.")
                 continue
             if weight > select_w:
                 select_w = weight

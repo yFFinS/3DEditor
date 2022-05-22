@@ -25,6 +25,9 @@ class SceneActionsInterface:
 class GLSceneInterface:
     on_scene_changed: Event
 
+    def move(self, move: glm.vec3):
+        pass
+
     def get_scene(self) -> Scene:
         raise NotImplementedError
 

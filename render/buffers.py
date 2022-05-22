@@ -33,16 +33,28 @@ class VertexBuffer(Buffer):
     def __init__(self):
         super(VertexBuffer, self).__init__(GL.GL_ARRAY_BUFFER)
 
-    def reserve_size(self, size, data_type):
+    def clear_offset(self, size: int, offset: int):
+        if self.id == -1:
+            return
+        self.set_data_offset(size, offset, np.array([0] * size,
+                                                    dtype=np.float32))
+
+    def reserve_size(self, size: int, data_type: type):
+        if self.id == -1:
+            return
         GL.glNamedBufferStorage(self.id, size * glm.sizeof(data_type),
-                                np.array([], dtype=data_type),
+                                None,
                                 GL.GL_DYNAMIC_STORAGE_BIT)
 
     def set_data(self, size: int, data, usage: GL.Constant = GL.GL_STATIC_DRAW):
+        if self.id == -1:
+            return
         GL.glNamedBufferData(self.id, size, data, usage)
 
     def set_data_offset(self, size: int, offset: int, data,
                         usage: GL.Constant = GL.GL_STATIC_DRAW):
+        if self.id == -1:
+            return
         GL.glNamedBufferSubData(self.id, offset, size, data, usage)
 
 
@@ -50,17 +62,23 @@ class IndexBuffer(Buffer):
     def __init__(self):
         super(IndexBuffer, self).__init__(GL.GL_ELEMENT_ARRAY_BUFFER)
 
-    def reserve_size(self, size):
+    def reserve_size(self, size: int):
+        if self.id == -1:
+            return
         GL.glNamedBufferStorage(self.id, size * 4,
                                 np.array([], dtype=np.uint),
                                 GL.GL_DYNAMIC_STORAGE_BIT)
 
     def set_indices(self, indices: npt.NDArray[np.uint],
                     usage: GL.Constant = GL.GL_STATIC_DRAW):
+        if self.id == -1:
+            return
         GL.glNamedBufferData(self.id, len(indices) * indices.itemsize, indices,
                              usage)
 
     def set_indices_offset(self, offset: int, indices: npt.NDArray[np.uint],
                            usage: GL.Constant = GL.GL_STATIC_DRAW):
+        if self.id == -1:
+            return
         GL.glNamedBufferSubData(self.id, offset,
                                 len(indices) * indices.itemsize, indices, usage)

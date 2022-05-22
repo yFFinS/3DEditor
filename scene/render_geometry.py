@@ -1,8 +1,6 @@
-import functools
-
 import OpenGL.GL as GL
-import glm
 
+import profiling.profiler
 from core.Base_geometry_objects import *
 from render.mesh import Mesh
 from render.shared_vbo import SharedMesh
@@ -18,7 +16,7 @@ SELECT_FACE = 1 << 4
 
 
 class ScenePoint(SceneObject):
-    __selected_color = glm.vec4(0.4, 0.4, 1, 1)
+    SEL_COLOR = glm.vec4(0.4, 0.4, 1, 1)
 
     def __init__(self, point: Point):
         super(ScenePoint, self).__init__(point)
@@ -30,26 +28,30 @@ class ScenePoint(SceneObject):
         self.selection_mask = SELECT_POINT
 
         self.mesh = SharedMesh.request_mesh(1, self.render_mode)
-        self.__update_local_position()
-        self.mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)]))
+        self.__update_mesh()
+        self.set_selected(False)
+
+    def on_delete(self):
+        self.mesh.clear()
 
     def set_selected(self, value: bool):
         self.mesh.set_colors(
-            np.array([ScenePoint.__selected_color
+            np.array([ScenePoint.SEL_COLOR
                       if value else glm.vec4(0, 0, 0, 1)]))
 
     @classmethod
-    def from_pos(cls, pos: glm.vec3) -> 'ScenePoint':
+    def by_pos(cls, pos: glm.vec3) -> 'ScenePoint':
         return ScenePoint(Point(pos))
 
-    def __update_local_position(self):
+    @profiling.profiler.profile
+    def __update_mesh(self):
         self.mesh.set_positions(np.array([self.point.pos]))
 
     def update_hierarchy_position(self, pos: glm.vec3,
                                   ignored: set['SceneObject']):
         self.point.pos = pos
         self.transform.translation = pos
-        self.__update_local_position()
+        self.__update_mesh()
 
         for child in self.children:
             if child not in ignored:
@@ -245,6 +247,8 @@ class ScenePlane(SceneObject):
 
 
 class SceneEdge(SceneObject):
+    SEL_COLOR = glm.vec4(0.55, 0.55, 1, 1)
+
     def __init__(self, segment: Segment, *parents: SceneObject):
         super(SceneEdge, self).__init__(segment, *parents)
 
@@ -253,10 +257,16 @@ class SceneEdge(SceneObject):
         self.render_layer = 1
         self.selection_mask = SELECT_EDGE
 
-        self.mesh = Mesh()
+        self.mesh = SharedMesh.request_mesh(2, self.render_mode)
         self.__update_local_position()
-        self.mesh.set_colors(
-            np.array([glm.vec4(0, 0, 0, 1)] * self.mesh.get_vertex_count()))
+        self.set_selected(False)
+
+    def on_delete(self):
+        self.mesh.clear()
+
+    def set_selected(self, value: bool):
+        self.mesh.set_colors(np.array(
+            [SceneEdge.SEL_COLOR if value else glm.vec4(0, 0, 0, 1)] * 2))
 
     @classmethod
     def by_two_points(cls, scene_point1: ScenePoint,
@@ -268,8 +278,12 @@ class SceneEdge(SceneObject):
     def __update_local_position(self):
         p1, p2 = self.edge.point1, self.edge.point2
         self.transform.translation = (p1.pos + p2.pos) / 2
-        half = (p2.pos - p1.pos) / 2
-        self.mesh.set_positions(np.array([-half, half]))
+        self.__update_mesh()
+
+    @profiling.profiler.profile
+    def __update_mesh(self):
+        p1, p2 = self.edge.point1, self.edge.point2
+        self.mesh.set_positions(np.array([p1.pos, p2.pos]))
 
     def update_hierarchy_position(self, pos: glm.vec3,
                                   ignored: set['SceneObject']):
@@ -280,6 +294,8 @@ class SceneEdge(SceneObject):
         for point in (point for point in self.parents if point not in ignored):
             point.update_hierarchy_position(point.transform.translation + move,
                                             ignored)
+
+        self.__update_mesh()
 
         for child in (child for child in self.children if child not in ignored):
             child.on_parent_position_updated(self)
@@ -301,6 +317,7 @@ class SceneEdge(SceneObject):
 
 class SceneFace(SceneObject):
     COLOR = glm.vec4(137 / 256, 143 / 256, 141 / 256, 1)
+    SEL_COLOR = glm.vec4(0.7, 0.7, 1, 1)
 
     def __init__(self, triangle: Triangle, *parents: SceneObject):
         super(SceneFace, self).__init__(triangle, *parents)
@@ -312,7 +329,14 @@ class SceneFace(SceneObject):
 
         self.mesh = SharedMesh.request_mesh(3, self.render_mode)
         self.__update_local_position()
-        self.mesh.set_colors(np.array([SceneFace.COLOR] * 3))
+        self.set_selected(False)
+
+    def on_delete(self):
+        self.mesh.clear()
+
+    def set_selected(self, value: bool):
+        self.mesh.set_colors(
+            np.array([SceneFace.SEL_COLOR if value else SceneFace.COLOR] * 3))
 
     @classmethod
     def by_three_points(cls, scene_point1: ScenePoint, scene_point2: ScenePoint,
@@ -326,6 +350,11 @@ class SceneFace(SceneObject):
         p1, p2, p3 = self.face.point1, self.face.point2, self.face.point3
         center = (p1.pos + p2.pos + p3.pos) / 3
         self.transform.translation = center
+        self.__update_mesh()
+
+    @profiling.profiler.profile
+    def __update_mesh(self):
+        p1, p2, p3 = self.face.point1, self.face.point2, self.face.point3
         self.mesh.set_positions(np.array([p1.pos, p2.pos, p3.pos]))
 
     def update_hierarchy_position(self, pos: glm.vec3,
@@ -338,6 +367,8 @@ class SceneFace(SceneObject):
                       isinstance(parent, ScenePoint) and parent not in ignored):
             point.update_hierarchy_position(point.transform.translation + move,
                                             ignored)
+
+        self.__update_mesh()
 
     def on_parent_position_updated(self, parent: 'SceneObject'):
         self.__update_local_position()

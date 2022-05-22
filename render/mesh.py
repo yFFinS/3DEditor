@@ -62,3 +62,9 @@ class Mesh:
 
     def unbind_vba(self):
         self._vba.unbind()
+
+    def dispose(self):
+        self._vba.dispose()
+        self._vbo_positions.dispose()
+        self._vbo_colors.dispose()
+        self._ibo.dispose()

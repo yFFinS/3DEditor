@@ -9,7 +9,8 @@ class IntersectionTests(unittest.TestCase):
         t3 = glm.vec3(-1, -1, 0)
         origin = glm.vec3(0, 0.1, -5)
         direction = glm.vec3(0, 0.1, 1)
-        intersection = ray_triangle_intersection_distance(origin, direction, t1, t2, t3)
+        intersection = ray_triangle_intersection_distance(
+            origin, direction, t1, t2, t3)
         self.assertFalse(glm.isnan(intersection))
 
 

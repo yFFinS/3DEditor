@@ -3,12 +3,16 @@ import os.path
 from PyQt5.QtCore import QObject
 from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtOpenGL import QGLWidget, QGLFormat
-from PyQt5.QtWidgets import QMainWindow, QWidget, QSplitter, QHBoxLayout, \
-    QSizePolicy, QVBoxLayout, QLineEdit, QLabel, QShortcut, QFileDialog, QAction, QDialog, QInputDialog, QErrorMessage
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QSplitter, QHBoxLayout,
+                             QSizePolicy, QVBoxLayout, QLineEdit, QLabel,
+                             QShortcut, QFileDialog,
+                             QAction, QErrorMessage)
+
+from PIL import Image, ImageOps
 
 from profiling.profiler import profile
 from core.event_dispatcher import *
-from gui.interfaces import GLSceneInterface, SceneExplorerInterface
+from gui.interfaces import GLSceneInterface
 from gui.widgets import SceneActions, SceneObjectList
 from interaction.camera_controller import CameraController
 from interaction.geometry_builders import *
@@ -30,21 +34,35 @@ class Window(QMainWindow):
 
         self.__opened_scene_name = None
 
-        menuBar = self.menuBar()
-        fileMenu = menuBar.addMenu('Файл')
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu('Файл')
 
         self.__save_scene_action = QAction()
         self.__save_scene_action.setText("Сохранить сцену")
         self.__save_scene_action.setShortcut("Ctrl+S")
         self.__save_scene_action.triggered.connect(self.__on_save_scene)
-        # TODO: добавить проверку изменений сцены self.__save_scene_action.setEnabled(False)
 
-        fileMenu.addAction(self.__save_scene_action)
-        fileMenu.addAction('Открыть сцену', self.__on_load_scene, "Ctrl+O")
-        fileMenu.addAction('Новая сцена', self.__on_new_scene, "Ctrl+N")
+        file_menu.addAction(self.__save_scene_action)
+        file_menu.addAction('Открыть сцену', self.__on_load_scene, "Ctrl+O")
+        file_menu.addAction('Новая сцена', self.__on_new_scene, "Ctrl+N")
+        file_menu.addAction('Экспортировать в BMP', self.__export_bmp,
+                            "Ctrl+E")
 
         self.setCentralWidget(self.__editor)
         self.setWindowTitle('3D Editor')
+
+    def __export_bmp(self):
+        dialog = self.__file_selection_dialog
+        dialog.setAcceptMode(QFileDialog.AcceptSave)
+        dialog.setFileMode(QFileDialog.AnyFile)
+
+        export_file = dialog.getSaveFileName(self, "Експорт сцены",
+                                             directory="scene_snapshot.bmp")
+        file = export_file[0]
+        if not file:
+            return
+
+        self.__editor.export_scene_image(file + ".bmp")
 
     def __on_new_scene(self):
         self.__editor.new_scene()
@@ -71,12 +89,13 @@ class Window(QMainWindow):
         dialog.setAcceptMode(QFileDialog.AcceptSave)
         dialog.setFileMode(QFileDialog.AnyFile)
 
-        save_file = dialog.getSaveFileName(self, "Сохранение сцены", self.__opened_scene_name)
+        save_file = dialog.getSaveFileName(self, "Сохранение сцены",
+                                           directory="scene.json")
         file = save_file[0]
         if not file:
             return
 
-        err_message = self.__editor.save_scene(save_file[0])
+        err_message = self.__editor.save_scene(save_file[0] + ".json")
         if err_message:
             self.__error_message.setWindowTitle("Ошибка сохранения сцены")
             self.__error_message.showMessage(err_message)
@@ -112,6 +131,16 @@ class EditorGUI(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
+    def export_scene_image(self, file_name: str):
+        camera = self.__gl_widget.get_scene().camera
+        width, height = camera.width, camera.height
+        pixels = GL.glReadPixels(0, 0, width, height,
+                                 GL.GL_RGB,
+                                 GL.GL_UNSIGNED_BYTE)
+        image = Image.frombytes("RGB", (width, height), pixels)
+        image = ImageOps.flip(image)
+        image.save(file_name)
+
     def new_scene(self):
         self.__gl_widget.set_scene(None, None)
 
@@ -124,8 +153,10 @@ class EditorGUI(QWidget):
 
     def load_scene(self, file_name: str) -> str:
         try:
-            camera_settings, objects = serialize.deserialize_scene(file_name)
-            self.__gl_widget.set_scene(camera_settings, objects.values())
+            camera_settings, objects, children_data = \
+                serialize.deserialize_scene(file_name)
+            self.__gl_widget.set_scene(camera_settings, objects,
+                                       children_data)
             return ''
         except Exception as e:
             return str(e)
@@ -147,6 +178,8 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
 
         self.on_scene_changed = Event()
 
+        self.__rmb_held = False
+        self.__moving = True
         self.__scene = None
         self.__camera_controller = None
         self.__geometry_builder = None
@@ -166,13 +199,38 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         self.__cancel_sc = QShortcut("Esc", self)
         self.__cancel_sc.activated.connect(self.__cancel)
 
-    def set_scene(self, camera_settings=None, objects=None):
+    def move(self, move: glm.vec3):
+        if self.__rmb_held:
+            self.get_scene().camera.move_by(move)
+            self.redraw()
+            return
+
+        if not self.__moving:
+            return
+        selected = [obj for obj in self.get_scene().objects if obj.selected]
+        if len(selected) != 1:
+            return
+        selected = selected[0]
+        selected.update_position(selected.transform.translation + move)
+        self.redraw()
+
+    @staticmethod
+    def __resolve_children(data, objects):
+        for parent_id, child_ids in data.items():
+            parent = objects[parent_id]
+            for child_id in child_ids:
+                child = objects[child_id]
+                parent.add_children(child)
+
+    def set_scene(self, camera_settings=None, objects=None, children_data=None):
+        SharedMesh.clear_meshes()
+
         camera = Camera(self.width(), self.height())
         if camera_settings is not None:
             serialize.inject_camera_settings(camera, camera_settings)
 
-        scene = Scene()
         prev_scene = self.__scene
+        scene = Scene()
         self.on_scene_changed.invoke(prev_scene, scene)
 
         scene.camera = camera
@@ -181,7 +239,10 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         scene.add_object(SceneCoordAxis())
 
         if objects is not None:
-            scene.add_objects(list(self.__convert_objects(objects)))
+            scene_objects = dict(self.__convert_objects(objects))
+            if children_data is not None:
+                self.__resolve_children(children_data, scene_objects)
+            scene.add_objects(scene_objects.values())
 
         self.__scene = scene
         self.__camera_controller = controller
@@ -190,23 +251,24 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
 
     @staticmethod
     def __convert_objects(objects):
-        for obj in objects:
+        for obj_id, obj in objects.items():
             if isinstance(obj, Point):
-                yield ScenePoint(obj)
+                yield obj_id, ScenePoint(obj)
             elif isinstance(obj, BaseLine):
-                yield SceneLine(obj)
+                yield obj_id, SceneLine(obj)
             elif isinstance(obj, BasePlane):
-                yield ScenePlane(obj)
+                yield obj_id, ScenePlane(obj)
             elif isinstance(obj, Segment):
-                yield SceneEdge(obj)
+                yield obj_id, SceneEdge(obj)
             elif isinstance(obj, Triangle):
-                yield SceneFace(obj)
+                yield obj_id, SceneFace(obj)
             else:
                 print(f"Unknown object {obj}")
 
     @staticmethod
     def __action(func):
         def wrapper(self):
+            self.__moving = False
             func(self)
             self.__last_action = func
 
@@ -238,6 +300,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         GL.glEnable(GL.GL_LINE_SMOOTH)
         GL.glEnable(GL.GL_MULTISAMPLE)
         GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
+        GL.glLineStipple(8, 0xAAAA)
         GL.glPolygonOffset(1, 1)
 
         def get_shader_path(shader):
@@ -291,11 +354,17 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
             self.__scene.render_shared()
 
     def on_mouse_pressed(self, event: QMouseEvent):
+        if event.button() == Qt.RightButton:
+            self.__rmb_held = True
         if self.__geometry_builder is not None:
             return False
         if event.button() == Qt.LeftButton:
             return self.try_select_scene_object(event)
         return False
+
+    def on_mouse_released(self, event: QMouseEvent):
+        if event.button() == Qt.RightButton:
+            self.__rmb_held = False
 
     def __on_delete(self):
         builder = self.__geometry_builder
@@ -329,7 +398,7 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
 
     @__action
     def move_object(self):
-        # TODD:
+        self.__moving = True
         self.__geometry_builder = None
 
     @__action
@@ -362,7 +431,8 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
 
     def __subscribe_to_geometry_builder(self):
         self.__geometry_builder.on_builder_ready += self.__on_builder_ready
-        self.__geometry_builder.on_builder_canceled += self.__on_builder_canceled
+        self.__geometry_builder.on_builder_canceled \
+            += self.__on_builder_canceled
 
     def __on_builder_ready(self):
         pass
@@ -370,10 +440,6 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
     def __on_builder_canceled(self):
         self.__geometry_builder = None
         self.__last_action(self)
-
-    def handle_move_object(self, event):
-        # TODO:
-        pass
 
     @profile
     def try_select_scene_object(self, event: QMouseEvent):
@@ -433,7 +499,7 @@ class SceneObjectProperties(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        self.__selected_objects = []
+        self.__selected_objects = set()
         self.__scene_object = None
         self.__object_name_edit = QLineEdit()
         self.__object_name_edit.editingFinished.connect(self.update_object)
@@ -488,23 +554,27 @@ class SceneObjectProperties(QWidget):
         if prev_scene is not None:
             prev_scene.on_objects_selected -= self.__on_objects_selected
             prev_scene.on_objects_deselected -= self.__on_objects_deselected
+            prev_scene.on_objects_removed -= self.__on_objects_removed
         if new_scene is not None:
             new_scene.on_objects_selected += self.__on_objects_selected
             new_scene.on_objects_deselected += self.__on_objects_deselected
+            new_scene.on_objects_removed += self.__on_objects_removed
+
+    def __on_objects_removed(self, scene_objects):
+        self.__on_objects_deselected(scene_objects)
 
     def __on_objects_selected(self, scene_objects):
-        self.__selected_objects.extend(scene_objects)
+        for obj in scene_objects:
+            self.__selected_objects.add(obj)
         if len(self.__selected_objects) == 1:
-            self.__set_object(self.__selected_objects[0])
+            self.__set_object(next(iter(self.__selected_objects)))
         else:
             self.__clear_and_disable_edit()
 
     def __on_objects_deselected(self, scene_objects):
-        self.__selected_objects = \
-            [selected for selected in self.__selected_objects
-             if selected not in scene_objects]
+        self.__selected_objects -= set(scene_objects)
         if len(self.__selected_objects) == 1:
-            self.__set_object(self.__selected_objects[0])
+            self.__set_object(next(iter(self.__selected_objects)))
         else:
             self.__clear_and_disable_edit()
 
@@ -530,9 +600,9 @@ class SceneObjectProperties(QWidget):
         if prim is not None:
             self.__object_name_edit.setText(prim.name)
         pos = self.__scene_object.transform.translation
-        self.x_edit.setText(f'{pos.x:4f}')
-        self.y_edit.setText(f'{pos.y:4f}')
-        self.z_edit.setText(f'{pos.z:4f}')
+        self.x_edit.setText(f'{pos.x:.4f}')
+        self.y_edit.setText(f'{pos.y:.4f}')
+        self.z_edit.setText(f'{pos.z:.4f}')
 
     def update_object(self):
         try:
