@@ -25,6 +25,9 @@ class RawSceneObject(ABC):
         self.render_mode = GL.GL_TRIANGLES
         self.render_layer = 0
 
+    def __eq__(self, other):
+        return self.id == other.id
+
     @property
     def id(self) -> uuid.UUID:
         return self.__id

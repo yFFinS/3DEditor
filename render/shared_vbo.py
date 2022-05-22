@@ -35,6 +35,7 @@ class VirtualMesh:
 
 class SharedMesh(Mesh):
     BATCH_SIZE = 2 ** 16
+    __test_mode = False
 
     def __init__(self, max_vertices: int, render_mode: GL.GL_CONSTANT):
         super(SharedMesh, self).__init__()
@@ -46,6 +47,10 @@ class SharedMesh(Mesh):
         self.render_mode = render_mode
         self._vbo_positions.reserve_size(max_vertices, glm.vec3)
         self._vbo_colors.reserve_size(max_vertices, glm.vec4)
+
+    @staticmethod
+    def initialize_test_mode():
+        SharedMesh.__test_mode = True
 
     def clear_offset(self, vertices: int, offset: int):
         self._vbo_positions.clear_offset(glm.sizeof(glm.vec3) * vertices,
@@ -68,6 +73,9 @@ class SharedMesh(Mesh):
     @staticmethod
     def request_mesh(vertices: int,
                      render_mode: GL.GL_CONSTANT) -> 'VirtualMesh':
+        if SharedMesh.__test_mode:
+            return TestVirtualMesh(None, 0, vertices)
+
         meshes = SharedMesh.__available
         meshes_with_matching_render_mode = [mesh for mesh in meshes if
                                             mesh.render_mode == render_mode]
@@ -102,3 +110,17 @@ class SharedMesh(Mesh):
 
     def __hash__(self):
         return hash(self.__id)
+
+
+class TestVirtualMesh(VirtualMesh):
+    def get_mesh(self):
+        return None
+
+    def set_positions(self, positions: NDArray[glm.vec3]):
+        pass
+
+    def set_colors(self, colors: NDArray[glm.vec4]):
+        pass
+
+    def clear(self):
+        pass
