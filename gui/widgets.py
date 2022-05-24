@@ -53,6 +53,7 @@ class SceneActions(QWidget, SceneActionsInterface):
         create_button("Point", self.action_point, "Alt+P")
         create_button("Edge", self.action_edge, "Alt+E")
         create_button("Face", self.action_face, "Alt+F")
+        create_button("Divide", self.action_divide, "Alt+D")
         layout.addStretch()
         create_button("Line", self.action_line, "Alt+L")
         create_button("Plane", self.action_plane, "Alt+Shift+P")
@@ -98,6 +99,10 @@ class SceneActions(QWidget, SceneActionsInterface):
     def action_e(self):
         move = glm.vec3(0, -1, 0)
         self.__gl_scene().move(move)
+
+    def action_divide(self):
+        self.__set_button_selected(self.sender())
+        self.__gl_scene().create_division()
 
     def action_rect(self):
         self.__set_button_selected(self.sender())

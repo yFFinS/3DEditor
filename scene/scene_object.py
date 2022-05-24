@@ -100,11 +100,12 @@ class SceneObject(RawSceneObject):
                 self.__children[child.id] = child
                 child.add_parents(self)
 
-    def remove_children(self, *children: 'SceneObject'):
+    def remove_children(self, *children: 'SceneObject', silent=False):
         for child in children:
             if child.id in self.__children:
                 self.__children.pop(child.id)
-                child.remove_parents(self)
+                if not silent:
+                    child.remove_parents(self)
 
     @property
     def primitive(self) -> BaseGeometryObject:
@@ -133,7 +134,8 @@ class SceneObject(RawSceneObject):
         pass
 
     def on_delete(self):
-        pass
+        for parent in self.parents:
+            parent.remove_children(self, silent=True)
 
     def get_selection_weight(self, camera: Camera,
                              click_pos: glm.vec2) -> float:

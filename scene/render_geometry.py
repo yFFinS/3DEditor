@@ -1,4 +1,5 @@
 import OpenGL.GL as GL
+import glm
 
 import profiling.profiler
 from core.Base_geometry_objects import *
@@ -33,6 +34,7 @@ class ScenePoint(SceneObject):
 
     def on_delete(self):
         self.mesh.clear()
+        super(ScenePoint, self).on_delete()
 
     def set_selected(self, value: bool):
         self.mesh.set_colors(
@@ -193,8 +195,8 @@ class ScenePlane(SceneObject):
         p1, p2, p3 = self.plane.get_pivot_points()
         center = (p1 + p2 + p3) / 3
         norm = self.plane.get_normal()
-        op1 = glm.normalize(p1 - center)
-        op2 = glm.normalize(glm.cross(norm, op1))
+        op1 = glm.normalize(p1 - center) * 1000
+        op2 = glm.normalize(glm.cross(norm, op1)) * 1000
         return [op1, op2, -op1, -op2]
 
     def update_hierarchy_position(self, pos: glm.vec3,
@@ -263,6 +265,7 @@ class SceneEdge(SceneObject):
 
     def on_delete(self):
         self.mesh.clear()
+        super(SceneEdge, self).on_delete()
 
     def set_selected(self, value: bool):
         self.mesh.set_colors(np.array(
@@ -314,6 +317,35 @@ class SceneEdge(SceneObject):
             return np.nan
         return (1 - distance / max_dist) * factor
 
+    def get_closest_point(self, camera: Camera,
+                          screen_pos: glm.vec2) -> glm.vec3:
+        s1, s2 = self.edge.get_points()
+        steps = 10
+        step_dist = glm.distance(s1, s2) / (steps + 1)
+        step_dir = glm.normalize(s2 - s1)
+
+        closest = None
+        closest_dist = 10 ** 18
+        for step in range(1, steps + 1):
+            p = s1 + step * step_dist * step_dir
+            sp = camera.world_to_screen(p)
+            dist = glm.distance2(sp, screen_pos)
+            if dist < closest_dist:
+                closest = p
+                closest_dist = dist
+
+        return closest
+
+        # s1, s2 = camera.world_to_screen(self.edge.point1.pos), \
+        #          camera.world_to_screen(self.edge.point2.pos)
+        # cp2 = closest_point_on_segment(screen_pos, s1, s2)
+        # ray_dir = camera.screen_to_world(cp2)
+        # ray_orig = camera.translation
+        # intersection = line_line_intersection(
+        #     ray_orig, ray_orig + ray_dir, self.edge.point1.pos,
+        #     self.edge.point2.pos)
+        # return intersection
+
 
 class SceneFace(SceneObject):
     COLOR = glm.vec4(137 / 256, 143 / 256, 141 / 256, 1)
@@ -333,6 +365,7 @@ class SceneFace(SceneObject):
 
     def on_delete(self):
         self.mesh.clear()
+        super(SceneFace, self).on_delete()
 
     def set_selected(self, value: bool):
         self.mesh.set_colors(

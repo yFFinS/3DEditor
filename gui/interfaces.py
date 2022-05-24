@@ -25,6 +25,9 @@ class SceneActionsInterface:
 class GLSceneInterface:
     on_scene_changed: Event
 
+    def create_division(self):
+        raise NotImplementedError
+
     def move(self, move: glm.vec3):
         pass
 

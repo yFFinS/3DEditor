@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy as np
 import glm
 from PyQt5.QtGui import QMouseEvent
@@ -37,7 +39,8 @@ def pyramid_volume_sign(s, t1, t2, t3):
     return glm.sign(glm.dot(glm.cross(t1 - s, t2 - s), t3 - s))
 
 
-def ray_plane_intersection_distance(origin: glm.vec3, direction: glm.vec3, point: glm.vec3, norm: glm.vec3) -> float:
+def ray_plane_intersection_distance(origin: glm.vec3, direction: glm.vec3,
+                                    point: glm.vec3, norm: glm.vec3) -> float:
     den = glm.dot(direction, norm)
     if almost_equal(den, 0):
         return np.nan
@@ -45,12 +48,14 @@ def ray_plane_intersection_distance(origin: glm.vec3, direction: glm.vec3, point
     return glm.dot(point - origin, norm) / den
 
 
-def ray_plane_intersection(origin: glm.vec3, direction: glm.vec3, point: glm.vec3, norm: glm.vec3) -> glm.vec3:
+def ray_plane_intersection(origin: glm.vec3, direction: glm.vec3,
+                           point: glm.vec3, norm: glm.vec3) -> glm.vec3:
     distance = ray_plane_intersection_distance(origin, direction, point, norm)
     return origin + distance * direction
 
 
-def point_to_line_distance(point: glm.vec2, line1: glm.vec2, line2: glm.vec2) -> float:
+def point_to_line_distance(point: glm.vec2, line1: glm.vec2,
+                           line2: glm.vec2) -> float:
     p = line1 - point
     dir_vec = glm.normalize(line2 - line1)
     return abs(p.x * dir_vec.y - dir_vec.x * p.y)
@@ -60,7 +65,8 @@ def point_to_point_distance(point1: glm.vec2, point2: glm.vec2) -> float:
     return glm.distance(point1, point2)
 
 
-def point_to_segment_distance(point: glm.vec2, segment1: glm.vec2, segment2: glm.vec2) -> float:
+def point_to_segment_distance(point: glm.vec2, segment1: glm.vec2,
+                              segment2: glm.vec2) -> float:
     S1S2 = segment2 - segment1
     S1P = point - segment1
     S2P = point - segment2
@@ -98,7 +104,8 @@ def is_inside_polygon(point: glm.vec2, polygon: list[glm.vec2]) -> bool:
 
 
 def ray_triangle_intersection_distance(origin: glm.vec3, direction: glm.vec3,
-                                       point1: glm.vec3, point2: glm.vec3, point3: glm.vec3) -> float:
+                                       point1: glm.vec3, point2: glm.vec3,
+                                       point3: glm.vec3) -> float:
     """https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm"""
 
     eps = 1e-5
@@ -123,7 +130,44 @@ def ray_triangle_intersection_distance(origin: glm.vec3, direction: glm.vec3,
 
 
 def ray_triangle_intersection(origin: glm.vec3, direction: glm.vec3,
-                              point1: glm.vec3, point2: glm.vec3, point3: glm.vec3) -> glm.vec3:
-    distance = ray_triangle_intersection_distance(origin, direction, point1, point2, point3)
+                              point1: glm.vec3, point2: glm.vec3,
+                              point3: glm.vec3) -> glm.vec3:
+    distance = ray_triangle_intersection_distance(origin, direction, point1,
+                                                  point2, point3)
     return origin + distance * direction
 
+
+def closest_point_on_segment(p, s1, s2):
+    distance = point_to_segment_distance(p, s1, s2)
+    S1P = glm.distance(s1, p)
+    if abs(distance - S1P) < 1e-5:
+        return s1
+
+    S2P = glm.distance(s2, p)
+    if abs(distance - S2P) < 1e-5:
+        return s2
+
+    dir_vec = s2 - s1
+    norm_vec = glm.normalize(glm.vec2(-dir_vec.y, dir_vec.x))
+    v1 = p + norm_vec * distance
+    d2 = v1 - s1
+
+    if abs(d2.x * dir_vec.y - d2.y * dir_vec.x) < 1e-4:
+        return v1
+    return p - norm_vec * dir_vec
+
+
+def line_line_intersection(a1, a2, b1, b2) -> Optional[glm.vec3]:
+    da = a2 - a1
+    db = b2 - b1
+    dc = b1 - a1
+
+    if abs(glm.dot(dc, glm.cross(da, db))) > 1e-4:
+        return None
+
+    s = glm.dot(glm.cross(dc, db), glm.cross(da, db)) / glm.length2(
+        glm.cross(da, db))
+    if 0 <= s <= 1:
+        return a1 + da * s
+
+    return None

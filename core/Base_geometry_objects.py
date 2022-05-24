@@ -1,3 +1,6 @@
+from _weakref import ref
+from typing import Iterable
+
 import glm
 import uuid
 
@@ -49,11 +52,11 @@ class Point(BaseGeometryObject):
     def get_serializing_dict(self):
         return {
             self.id:
-            {
-                "type": self.type,
-                "name": self.name,
-                "forming objects": [self.x, self.y, self.z]
-            }
+                {
+                    "type": self.type,
+                    "name": self.name,
+                    "forming objects": [self.x, self.y, self.z]
+                }
         }
 
 
@@ -84,13 +87,16 @@ class BaseLine(BaseGeometryObject):
         a1 = self.get_pivot_points()[0].xyz
         a2 = line.get_pivot_points()[0].xyz
         if abs((dir_vec1.x * dir_vec2.y - dir_vec2.x)) > 1e-9:
-            coef = (a2.x - a1.x + a1.y * dir_vec1.x - a2.x * dir_vec1.x) / (dir_vec1.x * dir_vec2.y - dir_vec2.x)
+            coef = (a2.x - a1.x + a1.y * dir_vec1.x - a2.x * dir_vec1.x) / (
+                        dir_vec1.x * dir_vec2.y - dir_vec2.x)
             return a2 + coef * dir_vec2
         elif abs((dir_vec1.x * dir_vec2.z - dir_vec2.x)) > 1e-9:
-            coef = (a2.x - a1.x + a1.z * dir_vec1.x - a2.x * dir_vec1.x) / (dir_vec1.x * dir_vec2.z - dir_vec2.x)
+            coef = (a2.x - a1.x + a1.z * dir_vec1.x - a2.x * dir_vec1.x) / (
+                        dir_vec1.x * dir_vec2.z - dir_vec2.x)
             return a2 + coef * dir_vec2
         else:
-            coef = (a2.y - a1.y + a1.z * dir_vec1.y - a2.y * dir_vec1.y) / (dir_vec1.y * dir_vec2.z - dir_vec2.y)
+            coef = (a2.y - a1.y + a1.z * dir_vec1.y - a2.y * dir_vec1.y) / (
+                        dir_vec1.y * dir_vec2.z - dir_vec2.y)
             return a2 + coef * dir_vec2
 
 
@@ -103,11 +109,11 @@ class LineBy2Points(BaseLine):
     def get_serializing_dict(self):
         return {
             self.id:
-            {
-                "type": self.type,
-                "name": self.name,
-                "forming objects": [self.point1.id, self.point2.id]
-            }
+                {
+                    "type": self.type,
+                    "name": self.name,
+                    "forming objects": [self.point1.id, self.point2.id]
+                }
         }
 
     def get_pivot_points(self):
@@ -126,11 +132,11 @@ class LineByPointAndLine(BaseLine):
     def get_serializing_dict(self):
         return {
             self.id:
-            {
-                "type": self.type,
-                "name": self.name,
-                "forming objects": [self.point.id, self.line.id]
-            }
+                {
+                    "type": self.type,
+                    "name": self.name,
+                    "forming objects": [self.point.id, self.line.id]
+                }
         }
 
     def get_pivot_points(self):
@@ -149,6 +155,7 @@ class BasePlane(BaseGeometryObject):
             BasePlane.__counter += 1
 
         super(BasePlane, self).__init__("plane", name, id)
+        self.__cuts = []
 
     @staticmethod
     def is_coplanar(point1, point2, point3):
@@ -160,8 +167,10 @@ class BasePlane(BaseGeometryObject):
     def is_collinear_to(self, plane: 'BasePlane') -> bool:
         pivots1 = self.get_pivot_points()
         pivots2 = plane.get_pivot_points()
-        norm1 = glm.normalize(glm.cross(pivots1[0] - pivots1[1], pivots1[0] - pivots1[2]))
-        norm2 = glm.normalize(glm.cross(pivots2[0] - pivots2[1], pivots2[0] - pivots2[2]))
+        norm1 = glm.normalize(
+            glm.cross(pivots1[0] - pivots1[1], pivots1[0] - pivots1[2]))
+        norm2 = glm.normalize(
+            glm.cross(pivots2[0] - pivots2[1], pivots2[0] - pivots2[2]))
         dot = glm.dot(norm1, norm2)
         return abs(abs(dot) - 1) < 1e-9
 
@@ -177,6 +186,17 @@ class BasePlane(BaseGeometryObject):
         dir1, dir2 = self.get_direction_vectors()
         return glm.normalize(glm.cross(dir1, dir2))
 
+    def add_cut(self, cut_line: BaseLine):
+        self.__cuts.append(ref(cut_line))
+
+    def remove_cut(self, cut_line: BaseLine):
+        self.__cuts.remove(ref(cut_line))
+
+    @property
+    def cuts(self) -> Iterable[BaseLine]:
+        for cut in self.__cuts:
+            yield cut()
+
 
 class PlaneBy3Points(BasePlane):
     def __init__(self, point1, point2, point3, name=None, id=None):
@@ -188,12 +208,13 @@ class PlaneBy3Points(BasePlane):
     def get_serializing_dict(self):
         return {
             self.id:
-            {
-                "type": self.type,
-                "name": self.name,
-                "forming objects": [self.point1.id, self.point2.id,
-                                    self.point3.id]
-            }
+                {
+                    "type": self.type,
+                    "name": self.name,
+                    "forming objects": [self.point1.id, self.point2.id,
+                                        self.point3.id],
+                    "cuts": list(self.cuts)
+                }
         }
 
     def get_pivot_points(self):
@@ -213,11 +234,12 @@ class PlaneByPointAndPlane(BasePlane):
     def get_serializing_dict(self):
         return {
             self.id:
-            {
-                "type": self.type,
-                "name": self.name,
-                "forming objects": [self.point.id, self.plane.id]
-            }
+                {
+                    "type": self.type,
+                    "name": self.name,
+                    "forming objects": [self.point.id, self.plane.id],
+                    "cuts": list(self.cuts)
+                }
         }
 
     def get_pivot_points(self):
@@ -238,11 +260,12 @@ class PlaneByPointAndLine(BasePlane):
     def get_serializing_dict(self):
         return {
             self.id:
-            {
-                "type": self.type,
-                "name": self.name,
-                "forming objects": [self.point.id, self.line.id]
-            }
+                {
+                    "type": self.type,
+                    "name": self.name,
+                    "forming objects": [self.point.id, self.line.id],
+                    "cuts": list(self.cuts)
+                }
         }
 
     def get_pivot_points(self):
@@ -265,7 +288,8 @@ class PlaneByPointAndSegment(BasePlane):
                 {
                     "type": self.type,
                     "name": self.name,
-                    "forming objects": [self.point.id, self.segment.id]
+                    "forming objects": [self.point.id, self.segment.id],
+                    "cuts": list(self.cuts)
                 }
         }
 
@@ -342,7 +366,8 @@ class Triangle(BaseGeometryObject):
                 {
                     "type": self.type,
                     "name": self.name,
-                    "forming objects": [self.point1.id, self.point2.id, self.point3.id]
+                    "forming objects": [self.point1.id, self.point2.id,
+                                        self.point3.id]
                 }
         }
 

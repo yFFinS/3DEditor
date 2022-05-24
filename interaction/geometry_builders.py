@@ -194,11 +194,14 @@ class PlaneBuilder(BaseBuilder):
         plane = None
         if len(self.points) == 1:
             if self.plane:
-                plane = self.__plane_from_point_and_plane(self.points[0], self.plane)
+                plane = self.__plane_from_point_and_plane(self.points[0],
+                                                          self.plane)
             elif self.line:
-                plane = self.__plane_from_point_and_line(self.points[0], self.line)
+                plane = self.__plane_from_point_and_line(self.points[0],
+                                                         self.line)
             elif self.segment:
-                plane = self.__plane_from_point_and_segment(self.points[0], self.segment)
+                plane = self.__plane_from_point_and_segment(self.points[0],
+                                                            self.segment)
         elif len(self.points) == 3:
             plane = self.__plane_from_points(*self.points)
 
@@ -321,6 +324,91 @@ class EdgeBuilder(BaseBuilder):
         if not self._ready and self._has_any_progress:
             scene.remove_object(self.p1)
         super(EdgeBuilder, self).cancel()
+
+
+class DivisionBuilder(BaseBuilder):
+    def __init__(self, scene):
+        super(DivisionBuilder, self).__init__(scene)
+        self.p = None
+        self.__shift_used = False
+
+    def on_mouse_pressed(self, event: QMouseEvent):
+        if event.button() != Qt.LeftButton:
+            return False
+
+        shift = event.modifiers() & Qt.ShiftModifier
+        if not shift and (self.__shift_used or self._ready):
+            self.p = None
+            self.__shift_used = False
+
+        if self._ready and not shift \
+                or not self._ready and not self.__shift_used:
+            self._deselect_all_once()
+        self._has_any_progress = True
+
+        camera = self._scene().camera
+        pos = extract_pos(event)
+
+        mask = SELECT_POINT if self.p is None else SELECT_EDGE
+        snap = self._try_snap_to(pos, mask=mask)
+
+        if not snap:
+            return False
+
+        if not self.p:
+            self.p = snap
+            self._scene().select(self.p)
+            return True
+
+        edge = snap
+        edge_parents = list(edge.parents)
+        if self.p in edge_parents:
+            return False
+
+        had_face = SceneFace.common_child(self.p, edge)
+
+        points = []
+        for parent in edge.parents:
+            if isinstance(parent, ScenePoint):
+                points.append(parent)
+        if len(points) != 2:
+            print("Should not have happened")
+            return False
+
+        div_point_raw = edge.get_closest_point(camera, pos)
+        if div_point_raw is None:
+            return False
+        div_point = ScenePoint.by_pos(div_point_raw)
+
+        scene = self._scene()
+        scene.remove_object(edge)
+
+        edge1 = SceneEdge.by_two_points(points[0], div_point)
+        edge2 = SceneEdge.by_two_points(points[1], div_point)
+        connecting_edge = SceneEdge.by_two_points(self.p, div_point)
+
+        self._push_object(div_point, True)
+        self._push_object(edge1)
+        self._push_object(edge2)
+        self._push_object(connecting_edge, True)
+
+        if had_face:
+            face1 = SceneFace.by_three_points(points[0], div_point, self.p)
+            face2 = SceneFace.by_three_points(points[1], div_point, self.p)
+            face1.add_parents(edge1, connecting_edge,
+                              SceneEdge.common_child(self.p, points[0]))
+            face2.add_parents(edge2, connecting_edge,
+                              SceneEdge.common_child(self.p, points[1]))
+            self._push_object(face1)
+            self._push_object(face2)
+
+        self._set_ready()
+
+        return True
+
+    def cancel(self):
+        self.p = None
+        super(DivisionBuilder, self).cancel()
 
 
 class FaceBuilder(BaseBuilder):
@@ -479,7 +567,8 @@ class RectBuilder(BaseBuilder):
         nbr = nbl + dx
 
         positions = [fbr, ftl, ftr, nbl, ntl, nbr]
-        points = [self.p1] + [ScenePoint.by_pos(pos) for pos in positions] + [p2]
+        points = [self.p1] + [ScenePoint.by_pos(pos) for pos in positions] + [
+            p2]
         for i in range(1, len(points) - 1):
             self._push_object(points[i], True)
 
@@ -487,7 +576,8 @@ class RectBuilder(BaseBuilder):
             first_point = points[first_index]
             second_point = points[second_index]
             third_point = points[third_index]
-            face = self.__face_from_points(first_point, second_point, third_point)
+            face = self.__face_from_points(first_point, second_point,
+                                           third_point)
             first_edge = self.__edge_from_points(first_point, second_point)
             second_edge = self.__edge_from_points(second_point, third_point)
             third_edge = self.__edge_from_points(third_point, first_point)

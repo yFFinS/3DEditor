@@ -211,7 +211,11 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         if len(selected) != 1:
             return
         selected = selected[0]
-        selected.update_position(selected.transform.translation + move)
+        camera = self.get_scene().camera
+        transformed_move = move.x * camera.right + move.y * camera.up + \
+                           move.z * camera.forward
+        selected.update_position(
+            selected.transform.translation + transformed_move)
         self.redraw()
 
     @staticmethod
@@ -391,6 +395,10 @@ class GLScene(QGLWidget, GLSceneInterface, EventHandlerInterface):
         for shader in self.__shaders:
             shader.dispose()
         self.__shaders.clear()
+
+    @__action
+    def create_division(self):
+        self.__create_builder(DivisionBuilder)
 
     @__action
     def no_action(self):

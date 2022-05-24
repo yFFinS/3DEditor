@@ -102,10 +102,10 @@ class Scene:
             return []
         removed = [scene_object]
 
+        for child in list(scene_object.children):
+            removed.extend(self.__remove_object_silent(child))
         scene_object.on_delete()
 
-        for child in scene_object.children:
-            removed.extend(self.__remove_object_silent(child))
         return removed
 
     @profile
