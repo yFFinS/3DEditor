@@ -27,7 +27,7 @@ class ScenePoint(SceneObject):
         self.render_layer = 1
         self.selection_mask = SELECT_POINT
 
-        self.mesh = SharedMesh.request_mesh(1, self.render_mode)
+        self.mesh = self.mesh_provider.get_shared_mesh(1, self.render_mode)
         self.__update_mesh()
         self.set_selected(False)
 
@@ -77,7 +77,7 @@ class SceneLine(SceneObject):
         self.render_layer = 1
         self.selection_mask = SELECT_LINE
 
-        self.mesh = Mesh()
+        self.mesh = self.mesh_provider.get_unique_mesh()
         self.__update_local_positions()
         self.mesh.set_colors(np.array([glm.vec4(0, 0, 0, 1)] * 2))
 
@@ -147,7 +147,7 @@ class ScenePlane(SceneObject):
         self.render_layer = 1
         self.selection_mask = SELECT_PLANE
 
-        self.mesh = Mesh()
+        self.mesh = self.mesh_provider.get_unique_mesh()
         self.__update_local_position()
         self.mesh.set_indices(np.array([0, 1, 2, 0, 3, 2]))
         self.mesh.set_colors(
@@ -257,7 +257,7 @@ class SceneEdge(SceneObject):
         self.render_layer = 1
         self.selection_mask = SELECT_EDGE
 
-        self.mesh = SharedMesh.request_mesh(2, self.render_mode)
+        self.mesh = self.mesh_provider.get_shared_mesh(2, self.render_mode)
         self.__update_local_position()
         self.set_selected(False)
 
@@ -327,7 +327,7 @@ class SceneFace(SceneObject):
         self.render_layer = 1
         self.selection_mask = SELECT_FACE
 
-        self.mesh = SharedMesh.request_mesh(3, self.render_mode)
+        self.mesh = self.mesh_provider.get_shared_mesh(3, self.render_mode)
         self.__update_local_position()
         self.set_selected(False)
 
@@ -424,7 +424,7 @@ class SceneCoordAxis(RawSceneObject):
             glm.vec3(0, 0, -axis_length),
         ])
 
-        self.mesh = Mesh()
+        self.mesh = self.mesh_provider.get_unique_mesh()
         self.mesh.set_positions(positions)
         self.mesh.set_colors(
             np.array([SceneCoordAxis.X_COLOR, SceneCoordAxis.X_COLOR,
@@ -483,7 +483,7 @@ class SceneGrid(RawSceneObject):
                 if x < row_size - 1:
                     indices.append(y * row_size + x)
                     indices.append(y * row_size + x + 1)
-        self.mesh = Mesh()
+        self.mesh = self.mesh_provider.get_unique_mesh()
         self.mesh.set_positions(np.array(positions))
         self.mesh.set_indices(np.array(indices))
         self.mesh.set_colors(np.array([SceneGrid.GRID_COLOR] * len(positions)))

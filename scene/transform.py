@@ -50,7 +50,7 @@ class Transform:
         self._transform_changed()
 
     def rotate_by(self, value: glm.vec3):
-        self.rotation += value
+        self.rotation *= glm.quat(value * glm.pi() / 180)
 
     def translate_by(self, value: glm.vec3):
         self.translation += value

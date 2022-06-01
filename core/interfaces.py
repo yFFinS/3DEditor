@@ -1,5 +1,3 @@
-from abc import ABC
-
 from PyQt5.QtCore import QEvent
 from PyQt5.QtGui import QMouseEvent, QWheelEvent, QKeyEvent
 

@@ -1,25 +1,5 @@
-import abc
-from abc import ABC, ABCMeta
-
 from PyQt5.QtGui import QMouseEvent
-
-from core.interfaces import UpdateReceiverInterface
 from scene.scene import *
-from scene.scene_object import SceneObject
-
-
-class SceneActionsInterface:
-    def action_move(self):
-        raise NotImplementedError
-
-    def action_point(self):
-        raise NotImplementedError
-
-    def action_line(self):
-        raise NotImplementedError
-
-    def action_plane(self):
-        raise NotImplementedError
 
 
 class GLSceneInterface:
@@ -62,23 +42,4 @@ class GLSceneInterface:
         raise NotImplementedError
 
     def try_select_scene_object(self, event: QMouseEvent) -> bool:
-        raise NotImplementedError
-
-
-class SceneExplorerInterface:
-    @abc.abstractmethod
-    def add_scene_object(self, scene_object: SceneObject):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def clear_selection(self):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def select_scene_object(self, scene_object: SceneObject,
-                            deselect_others: bool = False):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def deselect_scene_object(self, scene_object: SceneObject):
         raise NotImplementedError

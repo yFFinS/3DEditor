@@ -3,8 +3,30 @@ import unittest
 from PyQt5 import QtCore
 
 from interaction.geometry_builders import *
+from render.shared_vbo import MeshProvider
 from scene.render_geometry import *
 from scene.scene import Scene
+from scene.transform import Transform
+
+
+class TestMesh:
+    def get_mesh(self):
+        return None
+
+    def set_positions(self, *args, **kwargs):
+        pass
+
+    def set_colors(self, *args, **kwargs):
+        pass
+
+    def set_indices(self, *args, **kwargs):
+        pass
+
+    def clear(self):
+        pass
+
+    def get_vertex_count(self):
+        return 1
 
 
 def create_scene():
@@ -34,9 +56,17 @@ class IntersectionTests(unittest.TestCase):
         self.assertFalse(glm.isnan(intersection))
 
 
+class TestMeshProvider(MeshProvider):
+    def get_unique_mesh(self) -> Mesh:
+        return TestMesh()
+
+    def get_shared_mesh(self, vertices: int, render_mode: GL.GL_CONSTANT):
+        return TestMesh()
+
+
 class BuilderTests(unittest.TestCase):
     def setUp(self):
-        SharedMesh.initialize_test_mode()
+        RawSceneObject.MESH_PROVIDER = TestMeshProvider()
 
     def test_point_builder(self):
         scene = create_scene()
@@ -48,19 +78,6 @@ class BuilderTests(unittest.TestCase):
         obj = objects[0]
         self.assertTrue(isinstance(obj, ScenePoint))
         self.assertTrue(obj.primitive.pos == glm.vec3(2, 3, 4))
-
-    def test_point_builder_snap_does_not_add_point(self):
-        scene = create_scene()
-        scene.add_object(ScenePoint.by_pos(glm.vec3()))
-
-        builder = PointBuilder(scene)
-        builder.process_click(glm.vec2(0, 0), glm.vec3(), empty_mods())
-        objects = list(scene.objects)
-
-        self.assertTrue(len(objects) == 1)
-        obj = objects[0]
-        self.assertTrue(isinstance(obj, ScenePoint))
-        self.assertTrue(obj.primitive.pos == glm.vec3())
 
     def test_line_builder_two_points(self):
         scene = create_scene()
@@ -169,7 +186,7 @@ class BuilderTests(unittest.TestCase):
 
 class SceneObjectTests(unittest.TestCase):
     def setUp(self):
-        SharedMesh.initialize_test_mode()
+        RawSceneObject.MESH_PROVIDER = TestMeshProvider()
 
     def test_same_id(self):
         point = Point(glm.vec3())
@@ -309,6 +326,37 @@ class SceneObjectTests(unittest.TestCase):
 
         self.assertTrue(point1 in list(point2.parents))
         self.assertTrue(point2 in list(point1.children))
+
+
+class TransformTests(unittest.TestCase):
+    def test_translate(self):
+        transform = Transform()
+        transform.translate_by(glm.vec3(1, 1, 3))
+
+        self.assertTrue(transform.translation == glm.vec3(1, 1, 3))
+
+    def test_identity_directions(self):
+        transform = Transform()
+        self.assertTrue(transform.forward == glm.vec3(0, 0, 1))
+        self.assertTrue(transform.right == glm.vec3(1, 0, 0))
+        self.assertTrue(transform.up == glm.vec3(0, 1, 0))
+
+    def test_rotation(self):
+        transform = Transform()
+        transform.rotate_by(glm.vec3(0, 90, 0))
+
+        self.assert_vec_almost_equal(glm.vec3(0, glm.pi() / 2, 0), transform.eulers)
+
+    def test_rotation_directions(self):
+        transform = Transform()
+        transform.rotate_by(glm.vec3(0, 90, 0))
+
+        self.assert_vec_almost_equal(glm.vec3(0, 1, 0), transform.up)
+        self.assert_vec_almost_equal(glm.vec3(0, 0, -1), transform.right)
+        self.assert_vec_almost_equal(glm.vec3(1, 0, 0), transform.forward)
+
+    def assert_vec_almost_equal(self, v1, v2):
+        self.assertTrue(glm.distance(v1, v2) < 1e-3)
 
 
 class EventTests(unittest.TestCase):
