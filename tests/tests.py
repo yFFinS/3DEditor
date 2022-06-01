@@ -57,7 +57,7 @@ class IntersectionTests(unittest.TestCase):
 
 
 class TestMeshProvider(MeshProvider):
-    def get_unique_mesh(self) -> Mesh:
+    def get_unique_mesh(self):
         return TestMesh()
 
     def get_shared_mesh(self, vertices: int, render_mode: GL.GL_CONSTANT):

@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Optional
+from typing import Optional, cast
 from weakref import ref
 
 from PyQt5.QtCore import Qt
@@ -326,35 +326,25 @@ class DivisionBuilder(BaseBuilder):
         camera = self._scene().camera
         pos = extract_pos(event)
 
-        mask = SELECT_POINT if self.p is None else SELECT_EDGE
-        snap = self._try_snap_to(pos, mask=mask)
+        snap = self._try_snap_to(pos, mask=SELECT_EDGE)
 
         if not snap:
             return False
 
-        if not self.p:
-            self.p = snap
-            self._scene().select(self.p)
-            return True
-
-        edge = snap
-        edge_parents = list(edge.parents)
-        if self.p in edge_parents:
-            return False
-
-        had_face = SceneFace.common_child(self.p, edge)
-
-        points = []
-        for parent in edge.parents:
-            if isinstance(parent, ScenePoint):
-                points.append(parent)
-        if len(points) != 2:
-            print("Should not have happened")
-            return False
-
+        edge = cast(SceneEdge, snap)
         div_point_raw = edge.get_closest_point(camera, pos)
         if div_point_raw is None:
             return False
+
+        points = [obj for obj in edge.parents if isinstance(obj, ScenePoint)]
+        if len(points) != 2:
+            print("Edge expected to have exactly 2 point parents.")
+            return False
+
+        attached_faces = [obj for obj in edge.children if isinstance(obj, SceneFace)]
+        faces_third_points = [obj for face in attached_faces for obj in face.parents
+                              if isinstance(obj, ScenePoint) and obj not in points]
+
         div_point = ScenePoint.by_pos(div_point_raw)
 
         scene = self._scene()
@@ -362,22 +352,25 @@ class DivisionBuilder(BaseBuilder):
 
         edge1 = SceneEdge.by_two_points(points[0], div_point)
         edge2 = SceneEdge.by_two_points(points[1], div_point)
-        connecting_edge = SceneEdge.by_two_points(self.p, div_point)
 
-        self._push_object(div_point, True)
-        self._push_object(edge1)
-        self._push_object(edge2)
-        self._push_object(connecting_edge, True)
+        silent_added = [edge1, edge2]
+        selected_added = [div_point]
 
-        if had_face:
-            face1 = SceneFace.by_three_points(points[0], div_point, self.p)
-            face2 = SceneFace.by_three_points(points[1], div_point, self.p)
+        for third_point in faces_third_points:
+            connecting_edge = SceneEdge.by_two_points(div_point, third_point)
+
+            face1 = SceneFace.by_three_points(points[0], div_point, third_point)
+            face2 = SceneFace.by_three_points(points[1], div_point, third_point)
             face1.add_parents(edge1, connecting_edge,
-                              SceneEdge.common_child(self.p, points[0]))
+                              SceneEdge.common_child(third_point, points[0]))
             face2.add_parents(edge2, connecting_edge,
-                              SceneEdge.common_child(self.p, points[1]))
-            self._push_object(face1)
-            self._push_object(face2)
+                              SceneEdge.common_child(third_point, points[1]))
+
+            selected_added.append(connecting_edge)
+            silent_added.extend([face1, face2])
+
+        scene.add_objects(silent_added + selected_added)
+        scene.select(selected_added)
 
         self._set_ready()
 

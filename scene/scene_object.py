@@ -29,6 +29,8 @@ class RawSceneObject(ABC):
         self.render_layer = 0
 
     def __eq__(self, other):
+        if other is None:
+            return self is None
         return self.id == other.id
 
     @property

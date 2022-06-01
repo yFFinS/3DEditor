@@ -12,12 +12,12 @@ from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QSizePolicy, QPushButton,
                              QListWidgetItem, QListView, QShortcut)
 
 import profiling.profiler
-from gui.interfaces import SceneActionsInterface, GLSceneInterface
+from gui.interfaces import GLSceneInterface
 from scene.render_geometry import ScenePoint, SceneEdge
 from scene.scene_object import SceneObject
 
 
-class SceneActions(QWidget, SceneActionsInterface):
+class SceneActions(QWidget):
     def __init__(self, gl_scene: GLSceneInterface):
         super(QWidget, self).__init__()
 
@@ -110,16 +110,36 @@ class SceneActions(QWidget, SceneActionsInterface):
 
     def action_stress_test2(self):
         scene = self.__gl_scene().get_scene()
-        iter_count = 1_000_000
-        pos_range = 1000
-        points = []
-        for i in range(iter_count):
-            pos = glm.vec3(random.randint(-pos_range, pos_range),
-                           random.randint(-pos_range, pos_range),
-                           random.randint(-pos_range, pos_range))
-            point = ScenePoint.by_pos(pos)
-            points.append(point)
-        scene.add_objects(points)
+        bounds = 4
+        step = 0.05
+        max_buffer_size = 10_000
+
+        prev = None
+        objects = []
+        u = -bounds
+        while u < bounds:
+            v = -bounds
+            while v < bounds:
+                v += step
+                x = glm.sinh(u) * glm.cosh(v)
+                y = glm.sinh(v)
+                z = glm.cosh(u) * glm.cosh(v)
+                pos = glm.vec3(x, y, z)
+                point = ScenePoint.by_pos(pos)
+                objects.append(point)
+
+                if prev:
+                    edge = SceneEdge.by_two_points(prev, point)
+                    objects.append(edge)
+                prev = point
+
+                if len(objects) >= max_buffer_size - 2:
+                    scene.add_objects(objects)
+                    objects.clear()
+            u += step
+
+        if objects:
+            scene.add_objects(objects)
 
         self.__gl_scene().redraw()
 
