@@ -35,6 +35,19 @@ class BaseBuilder(EventHandlerInterface, ABC):
     def on_mouse_double_click(self, event: QMouseEvent):
         return self.on_mouse_pressed(event)
 
+    def on_mouse_pressed(self, event: QMouseEvent):
+        if event.button() != Qt.LeftButton:
+            return
+
+        camera = self._scene().camera
+        pos = extract_pos(event)
+        ray = camera.screen_to_world(pos)
+        place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
+        return self.process_click(pos, round_vec3(place), event.modifiers())
+
+    def process_click(self, screen_pos: glm.vec2, world_pos: glm.vec3, mods) -> bool:
+        return False
+
     @property
     def has_any_progress(self) -> bool:
         return self._has_any_progress
@@ -64,23 +77,13 @@ class BaseBuilder(EventHandlerInterface, ABC):
 
 
 class PointBuilder(BaseBuilder):
-    def on_mouse_pressed(self, event: QMouseEvent):
-        if event.button() != Qt.LeftButton:
-            return False
-
+    def process_click(self, screen_pos, world_pos, mods) -> bool:
         self._deselect_all_once()
 
-        camera = self._scene().camera
-        pos = extract_pos(event)
-        ray = camera.screen_to_world(pos)
-
-        place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
-
-        point = ScenePoint(Point(glm.vec3(place.x, place.y, place.z)))
+        point = ScenePoint(Point(glm.vec3(world_pos.x, world_pos.y, world_pos.z)))
         self._push_object(point, True)
 
         self._set_ready()
-
         return True
 
 
@@ -89,20 +92,14 @@ class LineBuilder(BaseBuilder):
         super(LineBuilder, self).__init__(scene)
         self.p1 = None
 
-    def on_mouse_pressed(self, event: QMouseEvent):
-        if event.button() != Qt.LeftButton:
-            return False
-
+    def process_click(self, screen_pos, world_pos, mods) -> bool:
         if self._ready:
             self.p1 = None
 
         self._reset_ready()
         self._deselect_all_once()
         self._has_any_progress = True
-
-        camera = self._scene().camera
-        pos = extract_pos(event)
-        snap = self._try_snap_to(pos)
+        snap = self._try_snap_to(screen_pos)
 
         if snap:
             if snap == self.p1:
@@ -110,10 +107,7 @@ class LineBuilder(BaseBuilder):
             point = snap
             self._scene().select(point)
         else:
-            ray = camera.screen_to_world(pos)
-            place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
-            place = round_vec3(place)
-            point = ScenePoint.by_pos(place)
+            point = ScenePoint.by_pos(world_pos)
             self._push_object(point, True)
 
         if self.p1:
@@ -149,21 +143,15 @@ class PlaneBuilder(BaseBuilder):
         self.line = None
         self.segment = None
 
-    def on_mouse_pressed(self, event: QMouseEvent):
-        if event.button() != Qt.LeftButton:
-            return False
-
+    def process_click(self, screen_pos: glm.vec2, world_pos: glm.vec3, mods) -> bool:
         self._reset_ready()
         self._deselect_all_once()
         self._has_any_progress = True
 
-        camera = self._scene().camera
-        pos = extract_pos(event)
-
         mask = SELECT_POINT
         if len(self.points) < 2:
             mask |= SELECT_PLANE | SELECT_EDGE | SELECT_LINE
-        snap = self._try_snap_to(pos, mask=mask)
+        snap = self._try_snap_to(screen_pos, mask=mask)
 
         if snap:
             if snap in self.points or snap == self.plane or snap == self.line or snap == self.segment:
@@ -184,10 +172,7 @@ class PlaneBuilder(BaseBuilder):
                 self.points.append(snap)
             self._scene().select(snap)
         else:
-            ray = camera.screen_to_world(pos)
-            place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
-            place = round_vec3(place)
-            point = ScenePoint.by_pos(place)
+            point = ScenePoint.by_pos(world_pos)
             self._push_object(point, True)
             self.points.append(point)
 
@@ -269,11 +254,8 @@ class EdgeBuilder(BaseBuilder):
         self.p1 = None
         self.__shift_used = False
 
-    def on_mouse_pressed(self, event: QMouseEvent):
-        if event.button() != Qt.LeftButton:
-            return False
-
-        shift = bool(event.modifiers() & Qt.ShiftModifier)
+    def process_click(self, screen_pos: glm.vec2, world_pos: glm.vec3, mods) -> bool:
+        shift = bool(mods & Qt.ShiftModifier)
         if not shift and (self.__shift_used or self._ready):
             self.p1 = None
             self.__shift_used = False
@@ -284,9 +266,7 @@ class EdgeBuilder(BaseBuilder):
         self._reset_ready()
         self._has_any_progress = True
 
-        camera = self._scene().camera
-        pos = extract_pos(event)
-        snap = self._try_snap_to(pos)
+        snap = self._try_snap_to(screen_pos)
 
         if snap:
             if snap == self.p1:
@@ -294,10 +274,7 @@ class EdgeBuilder(BaseBuilder):
             point = snap
             self._scene().select(point)
         else:
-            ray = camera.screen_to_world(pos)
-            place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
-            place = round_vec3(place)
-            point = ScenePoint.by_pos(place)
+            point = ScenePoint.by_pos(world_pos)
             self._push_object(point, True)
 
         if self.p1:
@@ -419,11 +396,8 @@ class FaceBuilder(BaseBuilder):
         self.edge = None
         self.__shift_used = False
 
-    def on_mouse_pressed(self, event: QMouseEvent):
-        if event.button() != Qt.LeftButton:
-            return False
-
-        shift = event.modifiers() & Qt.ShiftModifier
+    def process_click(self, screen_pos: glm.vec2, world_pos: glm.vec3, mods) -> bool:
+        shift = bool(mods & Qt.ShiftModifier)
         if not shift and (self.__shift_used or self._ready):
             self.p1 = None
             self.p2 = None
@@ -436,9 +410,7 @@ class FaceBuilder(BaseBuilder):
         self._reset_ready()
         self._has_any_progress = True
 
-        camera = self._scene().camera
-        pos = extract_pos(event)
-        snap = self._try_snap_to(pos)
+        snap = self._try_snap_to(screen_pos)
 
         if snap:
             if snap == self.p1 or snap == self.p2:
@@ -446,10 +418,7 @@ class FaceBuilder(BaseBuilder):
             point = snap
             self._scene().select(point)
         else:
-            ray = camera.screen_to_world(pos)
-            place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
-            place = round_vec3(place)
-            point = ScenePoint.by_pos(place)
+            point = ScenePoint.by_pos(world_pos)
             self._push_object(point, True)
 
         if self.p2 and self.edge is not None:
@@ -507,16 +476,11 @@ class RectBuilder(BaseBuilder):
         super(RectBuilder, self).__init__(scene)
         self.p1 = None
 
-    def on_mouse_pressed(self, event: QMouseEvent):
-        if event.button() != Qt.LeftButton:
-            return False
-
+    def process_click(self, screen_pos: glm.vec2, world_pos: glm.vec3, mods) -> bool:
         self._deselect_all_once()
         self._has_any_progress = True
 
-        camera = self._scene().camera
-        pos = extract_pos(event)
-        snap = self._try_snap_to(pos)
+        snap = self._try_snap_to(screen_pos)
 
         if snap:
             if snap == self.p1:
@@ -524,10 +488,7 @@ class RectBuilder(BaseBuilder):
             point = snap
             self._scene().select(point)
         else:
-            ray = camera.screen_to_world(pos)
-            place = camera.translation + BaseBuilder.CLICK_DEPTH * ray
-            place = round_vec3(place)
-            point = ScenePoint.by_pos(place)
+            point = ScenePoint.by_pos(world_pos)
             self._push_object(point, True)
 
         if self.p1:

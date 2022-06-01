@@ -9,21 +9,27 @@ from OpenGL import GL
 
 from core.Base_geometry_objects import BaseGeometryObject
 from core.event import Event
+from render.shared_vbo import MeshProvider
 from scene.camera import Camera
 from scene.transform import Transform
 
 
 class RawSceneObject(ABC):
     SHADER_PROGRAM = None
+    MESH_PROVIDER = MeshProvider()
 
     def __init__(self, obj_id: uuid.UUID = None):
         self.__id = obj_id if obj_id is not None else uuid.uuid4()
         self.transform: Transform = Transform()
 
+        self.mesh_provider = RawSceneObject.MESH_PROVIDER
         self.mesh = None
         self.shader_program = self.SHADER_PROGRAM
         self.render_mode = GL.GL_TRIANGLES
         self.render_layer = 0
+
+    def __eq__(self, other):
+        return self.id == other.id
 
     @property
     def id(self) -> uuid.UUID:

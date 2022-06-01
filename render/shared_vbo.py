@@ -102,3 +102,11 @@ class SharedMesh(Mesh):
 
     def __hash__(self):
         return hash(self.__id)
+
+
+class MeshProvider:
+    def get_shared_mesh(self, vertices: int, render_mode: GL.GL_CONSTANT) -> VirtualMesh:
+        return SharedMesh.request_mesh(vertices, render_mode)
+
+    def get_unique_mesh(self) -> Mesh:
+        return Mesh()

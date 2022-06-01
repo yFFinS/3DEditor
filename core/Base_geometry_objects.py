@@ -140,10 +140,10 @@ class LineByPointAndLine(BaseLine):
         }
 
     def get_pivot_points(self):
-        return self.point.xyz, self.point.xyz + self.line.get_direction_vector()
+        return self.point.pos, self.point.pos + self.line.get_directional_vector()
 
     def get_directional_vector(self):
-        return self.line.get_direction_vector()
+        return self.line.get_directional_vector()
 
 
 class BasePlane(BaseGeometryObject):
