@@ -109,10 +109,30 @@ class SceneActions(QWidget):
         self.__gl_scene().create_rect()
 
     def action_stress_test2(self):
+        def set1(u, v):
+            x = glm.sinh(u) * glm.cosh(v)
+            y = glm.sinh(v)
+            z = glm.cosh(u) * glm.cosh(v)
+            return glm.vec3(x, y, z)
+
+        def set2(u, v):
+            x = u
+            y = v
+            z = glm.sin(2 * (x + y * y * y))
+            return glm.vec3(x, y, z)
+
+        def set3(u, v):
+            x = u
+            y = v
+            z = (1 - x * x / 100 - y * y / 100) ** 0.5
+            return glm.vec3(x, y, z.real)
+
         scene = self.__gl_scene().get_scene()
-        bounds = 4
-        step = 0.05
+        bounds = 10
+        step = 0.2
         max_buffer_size = 10_000
+
+        func = random.choice([set1, set2, set3])
 
         prev = None
         objects = []
@@ -121,10 +141,7 @@ class SceneActions(QWidget):
             v = -bounds
             while v < bounds:
                 v += step
-                x = glm.sinh(u) * glm.cosh(v)
-                y = glm.sinh(v)
-                z = glm.cosh(u) * glm.cosh(v)
-                pos = glm.vec3(x, y, z)
+                pos = func(u, v)
                 point = ScenePoint.by_pos(pos)
                 objects.append(point)
 

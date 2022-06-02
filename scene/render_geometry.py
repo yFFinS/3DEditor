@@ -426,10 +426,10 @@ class SceneCoordAxis(RawSceneObject):
     X_COLOR = glm.vec4(1, 0, 0, 1)
     Y_COLOR = glm.vec4(0, 1, 0, 1)
     Z_COLOR = glm.vec4(0, 0, 1, 1)
-    NEG_COLOR_FACTOR = 150
-    NEG_X_COLOR = glm.vec4(1, NEG_COLOR_FACTOR / 256, NEG_COLOR_FACTOR / 256, 1)
-    NEG_Y_COLOR = glm.vec4(NEG_COLOR_FACTOR / 256, 1, NEG_COLOR_FACTOR / 256, 1)
-    NEG_Z_COLOR = glm.vec4(NEG_COLOR_FACTOR / 256, NEG_COLOR_FACTOR / 256, 1, 1)
+    NEG_COLOR_FACTOR = 150 / 256
+    NEG_X_COLOR = glm.vec4(1, NEG_COLOR_FACTOR, NEG_COLOR_FACTOR, 1)
+    NEG_Y_COLOR = glm.vec4(NEG_COLOR_FACTOR, 1, NEG_COLOR_FACTOR, 1)
+    NEG_Z_COLOR = glm.vec4(NEG_COLOR_FACTOR, NEG_COLOR_FACTOR, 1, 1)
 
     def __init__(self):
         super(SceneCoordAxis, self).__init__()
